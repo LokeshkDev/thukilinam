@@ -91,7 +91,7 @@ router.get('/:slug', async (req, res, next) => {
     if (!rows.length) return res.status(404).json({ success: false, message: 'Product not found.' });
     const product = rows[0];
 
-    const [images] = await pool.query('SELECT * FROM product_images WHERE product_id=? ORDER BY sort_order', [product.id]);
+    const [images] = await pool.query('SELECT * FROM product_images WHERE product_id=? ORDER BY is_primary DESC, sort_order ASC', [product.id]);
     const [variants] = await pool.query('SELECT * FROM product_variants WHERE product_id=?', [product.id]);
     const [specs] = await pool.query('SELECT * FROM product_specs WHERE product_id=?', [product.id]);
     const [reviews] = await pool.query(`

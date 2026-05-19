@@ -8,9 +8,11 @@ const Categories = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [currentCategory, setCurrentCategory] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
+    image: '',
     sort_order: 0,
     is_active: 1
   });
@@ -38,6 +40,7 @@ const Categories = () => {
     setFormData({
       name: category.name,
       slug: category.slug,
+      image: category.image || '',
       sort_order: category.sort_order,
       is_active: category.is_active
     });
@@ -72,9 +75,30 @@ const Categories = () => {
     }
   };
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const data = new FormData();
+    data.append('file', file);
+    try {
+      const res = await api.post('/upload?folder=categories', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        setFormData(prev => ({ ...prev, image: res.data.url }));
+      }
+    } catch (err) {
+      console.error('Error uploading image:', err);
+      alert('Failed to upload image. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const resetForm = () => {
     setCurrentCategory(null);
-    setFormData({ name: '', slug: '', sort_order: 0, is_active: 1 });
+    setFormData({ name: '', slug: '', image: '', sort_order: 0, is_active: 1 });
   };
 
   const filteredCategories = categories.filter(c => 
@@ -112,7 +136,8 @@ const Categories = () => {
           <table className="table align-middle mb-0">
             <thead className="table-light">
               <tr>
-                <th className="ps-4">Name</th>
+                <th className="ps-4">Image</th>
+                <th>Name</th>
                 <th>Slug</th>
                 <th>Sort Order</th>
                 <th>Status</th>
@@ -121,12 +146,21 @@ const Categories = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="5" className="text-center py-5">Loading...</td></tr>
+                <tr><td colSpan="6" className="text-center py-5">Loading...</td></tr>
               ) : filteredCategories.length === 0 ? (
-                <tr><td colSpan="5" className="text-center py-5">No categories found.</td></tr>
+                <tr><td colSpan="6" className="text-center py-5">No categories found.</td></tr>
               ) : filteredCategories.map((cat) => (
                 <tr key={cat.id}>
-                  <td className="ps-4 fw-bold">{cat.name}</td>
+                  <td className="ps-4">
+                    {cat.image ? (
+                      <img src={cat.image} alt={cat.name} style={{ width: '40px', height: '40px', objectFit: 'cover' }} className="rounded-3 shadow-sm" />
+                    ) : (
+                      <div className="bg-light d-flex align-items-center justify-content-center rounded-3" style={{ width: '40px', height: '40px' }}>
+                        <span className="text-muted small" style={{ fontSize: '10px' }}>No Img</span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="fw-bold">{cat.name}</td>
                   <td><code>{cat.slug}</code></td>
                   <td>{cat.sort_order}</td>
                   <td>
@@ -176,6 +210,28 @@ const Categories = () => {
                       value={formData.slug}
                       onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
                     />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label small fw-bold text-muted">Category Image</label>
+                    <input 
+                      type="file" 
+                      className="form-control mb-2" 
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                    />
+                    {uploading && <div className="spinner-border spinner-border-sm text-primary mb-2" role="status"><span className="visually-hidden">Uploading...</span></div>}
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      placeholder="Or paste image URL"
+                      value={formData.image}
+                      onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                    />
+                    {formData.image && (
+                      <div className="mt-2 text-center bg-light p-2 rounded-3">
+                        <img src={formData.image} alt="Preview" style={{ maxHeight: '100px', objectFit: 'contain' }} className="rounded animate__animated animate__fadeIn" />
+                      </div>
+                    )}
                   </div>
                   <div className="mb-3">
                     <label className="form-label small fw-bold text-muted">Sort Order</label>

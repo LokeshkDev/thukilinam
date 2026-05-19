@@ -21,6 +21,17 @@ const pool = mysql.createPool({
   try {
     const conn = await pool.getConnection();
     console.log('✅ MySQL connected successfully to:', process.env.DB_NAME, 'at', process.env.DB_HOST);
+    
+    // Dynamically alter orders.payment_method to accept cashfree
+    try {
+      await conn.query(`
+        ALTER TABLE orders MODIFY COLUMN payment_method VARCHAR(50) DEFAULT 'cashfree'
+      `);
+      console.log('✅ Database schema verified: payment_method column modified to VARCHAR(50).');
+    } catch (dbErr) {
+      console.error('⚠️ Warning: Failed to alter payment_method column:', dbErr.message);
+    }
+    
     conn.release();
   } catch (err) {
     console.error('❌ MySQL connection failed!');

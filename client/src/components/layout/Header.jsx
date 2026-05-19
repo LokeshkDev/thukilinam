@@ -16,6 +16,7 @@ const Header = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const announcementText = settings?.header?.announcement || "New arrivals every week";
   const logoText = settings?.header?.logo_text || "Thukilinam";
+  const logoImage = settings?.header?.logo_image || "/assets/thukilinam-logo.jpeg";
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
@@ -59,7 +60,7 @@ const Header = () => {
 
         <div className="main-nav">
           <Link className="brand" to="/" aria-label={`${logoText} home`}>
-            <img src="/assets/thukilinam-logo.jpeg" alt={`${logoText} logo`} />
+            <img src={logoImage} alt={`${logoText} logo`} />
             <span>{logoText}</span>
           </Link>
 
@@ -227,7 +228,7 @@ const Header = () => {
       <header className="mobile-header">
         <div className="mobile-top">
           <Link className="brand compact" to="/" aria-label={`${logoText} home`}>
-            <img src="/assets/thukilinam-logo.jpeg" alt={`${logoText} logo`} />
+            <img src={logoImage} alt={`${logoText} logo`} />
             <span>{logoText}</span>
           </Link>
           <Link className="icon-button mobile-bag-button" to="/cart" aria-label={`Open bag with ${cartCount} items`}>

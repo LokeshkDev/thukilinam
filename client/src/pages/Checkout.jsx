@@ -25,7 +25,7 @@ const Checkout = () => {
     city: '',
     state: '',
     pincode: '',
-    payment_method: 'cod'
+    payment_method: 'cashfree'
   });
 
   useEffect(() => {
@@ -105,13 +105,23 @@ const Checkout = () => {
       };
       
       const res = await api.post('/orders', orderData);
-      if (res.data.success) {
-        clearCart();
-        alert('Order placed successfully!');
-        navigate('/orders');
+      if (res.data.success && res.data.payment_session_id) {
+        if (!window.Cashfree) {
+          throw new Error('Payment gateway SDK failed to load. Please refresh the page and try again.');
+        }
+
+        const cashfree = window.Cashfree({ mode: "sandbox" });
+        let checkoutOptions = {
+          paymentSessionId: res.data.payment_session_id,
+          returnUrl: `${window.location.origin}/payment-callback?order_id=${res.data.order.order_number}`
+        };
+        
+        cashfree.checkout(checkoutOptions);
+      } else {
+        throw new Error('Failed to initialize payment session from backend.');
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Error placing order.');
+      alert(err.response?.data?.message || err.message || 'Error placing order.');
     } finally {
       setLoading(false);
     }
@@ -232,27 +242,28 @@ const Checkout = () => {
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginTop: '8px' }}>
               <label className="field" style={{
-                border: formData.payment_method === 'cod' ? '2px solid var(--purple-700)' : '1px solid var(--line)',
+                border: formData.payment_method === 'cashfree' ? '2px solid var(--purple-700)' : '1px solid var(--line)',
                 padding: '16px', borderRadius: '8px', cursor: 'pointer',
                 flexDirection: 'row', alignItems: 'center', gap: '14px',
-                background: formData.payment_method === 'cod' ? 'var(--soft)' : 'transparent',
+                background: formData.payment_method === 'cashfree' ? 'var(--soft)' : 'transparent',
                 transition: 'all 0.2s ease', margin: 0
               }}>
-                <input type="radio" checked={formData.payment_method === 'cod'} onChange={() => setFormData({...formData, payment_method: 'cod'})} style={{ width: 'auto', margin: 0 }} />
+                <input type="radio" checked={formData.payment_method === 'cashfree'} onChange={() => setFormData({...formData, payment_method: 'cashfree'})} style={{ width: 'auto', margin: 0 }} />
                 <div>
-                  <strong style={{ display: 'block', color: 'var(--ink)' }}>Cash on Delivery</strong>
-                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Pay securely on arrival.</span>
+                  <strong style={{ display: 'block', color: 'var(--ink)' }}>Online Payment</strong>
+                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Pay securely via UPI, Card, Netbanking (Cashfree).</span>
                 </div>
               </label>
               
               <label className="field" style={{
                 border: '1px solid var(--line)', padding: '16px', borderRadius: '8px', cursor: 'not-allowed',
-                opacity: 0.6, flexDirection: 'row', alignItems: 'center', gap: '14px', margin: 0
+                opacity: 0.6, flexDirection: 'row', alignItems: 'center', gap: '14px', margin: 0,
+                background: 'var(--soft)'
               }}>
-                <input type="radio" disabled style={{ width: 'auto', margin: 0 }} />
+                <input type="radio" disabled checked={false} style={{ width: 'auto', margin: 0 }} />
                 <div>
-                  <strong style={{ display: 'block', color: 'var(--ink)' }}>Online Payment</strong>
-                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Currently unavailable.</span>
+                  <strong style={{ display: 'block', color: 'var(--ink)' }}>Cash on Delivery</strong>
+                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Temporarily unavailable.</span>
                 </div>
               </label>
             </div>

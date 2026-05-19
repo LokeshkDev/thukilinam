@@ -18,8 +18,49 @@ const ProductDetail = () => {
   const [error, setError] = useState(null);
   const [activeThumb, setActiveThumb] = useState(0);
   const [selectedAttributes, setSelectedAttributes] = useState({});
+  const [selectedVariantImage, setSelectedVariantImage] = useState(null);
+  const [userHasSelectedVariant, setUserHasSelectedVariant] = useState(false);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
+
+  const handleAttributeChange = (attrName, val, currentProduct) => {
+    setUserHasSelectedVariant(true);
+    const newAttrs = { ...selectedAttributes, [attrName]: val };
+    setSelectedAttributes(newAttrs);
+
+    // Find corresponding variant with the new selection
+    const matchedVariant = currentProduct.variants?.find((variant) => {
+      const attrs = typeof variant.attributes === 'string' ? JSON.parse(variant.attributes) : (variant.attributes || {});
+      return Object.entries(newAttrs).every(([k, v]) => attrs[k] === v);
+    });
+
+    if (matchedVariant?.image_url) {
+      let variantImgs = [];
+      const imgVal = matchedVariant.image_url;
+      try {
+        if (imgVal.startsWith('[')) {
+          variantImgs = JSON.parse(imgVal);
+        } else {
+          variantImgs = imgVal.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      } catch (e) {
+        variantImgs = [imgVal];
+      }
+
+      if (variantImgs.length > 0) {
+        const firstUrl = variantImgs[0];
+        const formattedUrl = firstUrl.startsWith('http') 
+          ? firstUrl 
+          : `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}${firstUrl}`;
+        setSelectedVariantImage(formattedUrl);
+        setActiveThumb(0); // Reset to the first image of the variant
+      } else {
+        setSelectedVariantImage(null);
+      }
+    } else {
+      setSelectedVariantImage(null);
+    }
+  };
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -34,6 +75,9 @@ const ProductDetail = () => {
             const firstVar = res.data.product.variants[0];
             const attrs = typeof firstVar.attributes === 'string' ? JSON.parse(firstVar.attributes) : (firstVar.attributes || {});
             setSelectedAttributes(attrs);
+            // Ensure first load shows product primary image, not variant image
+            setSelectedVariantImage(null);
+            setUserHasSelectedVariant(false);
           }
         }
       } catch (err) {
@@ -51,10 +95,30 @@ const ProductDetail = () => {
   const images = product.images?.length > 0 
     ? product.images.map(img => img.image_url.startsWith('http') ? img.image_url : `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}${img.image_url}`)
     : ["/assets/placeholder.png"];
+
   const selectedVariant = product.variants?.find((variant) => {
     const attrs = typeof variant.attributes === 'string' ? JSON.parse(variant.attributes) : (variant.attributes || {});
     return Object.entries(selectedAttributes).every(([k, val]) => attrs[k] === val);
   });
+
+  const variantImages = (() => {
+    if (!selectedVariant?.image_url) return [];
+    const imgVal = selectedVariant.image_url;
+    let parsed = [];
+    try {
+      if (imgVal.startsWith('[')) {
+        parsed = JSON.parse(imgVal);
+      } else {
+        parsed = imgVal.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    } catch (e) {
+      parsed = [imgVal];
+    }
+    return parsed.map(url => url.startsWith('http') ? url : `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}${url}`);
+  })();
+
+  const galleryImages = (userHasSelectedVariant && variantImages.length > 0) ? variantImages : images;
+
   const isSaved = wishlistItems.some((item) => item.product_id === product.id || item.id === product.id);
 
   const handleAddToCart = async () => {
@@ -98,14 +162,17 @@ const ProductDetail = () => {
         {/* Product Images */}
         <div className="product-gallery">
           <div className="main-image">
-            <img src={selectedVariant?.image_url ? (selectedVariant.image_url.startsWith('http') ? selectedVariant.image_url : `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}${selectedVariant.image_url}`) : images[activeThumb]} alt={product.name} id="active-image" />
+            <img src={selectedVariantImage || galleryImages[activeThumb]} alt={product.name} id="active-image" />
           </div>
           <div className="thumbnail-list">
-            {images.map((img, i) => (
+            {galleryImages.map((img, i) => (
               <button 
                 key={i} 
                 className={activeThumb === i ? 'is-active' : ''} 
-                onClick={() => setActiveThumb(i)}
+                onClick={() => {
+                  setActiveThumb(i);
+                  setSelectedVariantImage(null);
+                }}
                 type="button"
               >
                 <img src={img} alt={`Thumbnail ${i + 1}`} />
@@ -177,7 +244,7 @@ const ProductDetail = () => {
                                   boxShadow: selectedAttributes[attrName] === val ? '0 0 0 2px #fff, 0 0 0 4px #000' : 'none',
                                   transition: 'all 0.2s'
                                 }}
-                                onClick={() => setSelectedAttributes({ ...selectedAttributes, [attrName]: val })}
+                                onClick={() => handleAttributeChange(attrName, val, product)}
                                 title={colorName}
                               />
                               <span style={{ fontSize: '11px', color: 'var(--muted)', textAlign: 'center', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{colorName}</span>
@@ -187,7 +254,7 @@ const ProductDetail = () => {
                               key={val} 
                               type="button" 
                               className={selectedAttributes[attrName] === val ? 'is-active' : ''}
-                              onClick={() => setSelectedAttributes({ ...selectedAttributes, [attrName]: val })}
+                              onClick={() => handleAttributeChange(attrName, val, product)}
                             >{val}</button>
                           );
                         })}

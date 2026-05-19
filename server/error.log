@@ -1,0 +1,14 @@
+[2026-05-19T08:59:27.050Z] Error: Data truncated for column 'payment_method' at row 1
+    at C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\routes\orders.js:58:38
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[2026-05-19T12:20:49.912Z] SignatureDoesNotMatch: The request signature we calculated does not match the signature you provided. Check your secret access key and signing method.
+    at ProtocolLib.getErrorSchemaOrThrowBaseException (C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\node_modules\@aws-sdk\core\dist-cjs\submodules\protocols\index.js:70:67)
+    at S3RestXmlProtocol.handleError (C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\node_modules\@aws-sdk\core\dist-cjs\submodules\protocols\index.js:1856:65)
+    at S3RestXmlProtocol.deserializeResponse (C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\node_modules\@smithy\core\dist-cjs\submodules\protocols\index.js:424:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\node_modules\@smithy\core\dist-cjs\submodules\schema\index.js:27:24
+    at async C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\node_modules\@aws-sdk\middleware-sdk-s3\dist-cjs\index.js:350:20
+    at async C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\node_modules\@smithy\core\dist-cjs\submodules\retry\index.js:172:50
+    at async C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\node_modules\@aws-sdk\middleware-flexible-checksums\dist-cjs\index.js:241:24
+    at async C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\node_modules\@aws-sdk\middleware-sdk-s3\dist-cjs\index.js:64:28
+    at async C:\Users\Lokesh\Desktop\E-commerce\thukilinam\server\node_modules\@aws-sdk\middleware-sdk-s3\dist-cjs\index.js:91:20

@@ -1,6 +1,21 @@
 const router = require('express').Router();
 const pool = require('../../database/connection');
 const adminAuth = require('../../middleware/adminAuth');
+const upload = require('../../utils/uploadUtils');
+const { getPublicUrl } = upload;
+
+// UPLOAD ENDPOINT FOR CMS, CATEGORIES, BANNERS, ETC.
+router.post('/upload', adminAuth, upload.any(), (req, res, next) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No file uploaded.' });
+    }
+    const fileUrl = getPublicUrl(req.files[0]);
+    res.json({ success: true, url: fileUrl });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // COUPONS
 router.get('/coupons', adminAuth, async (req, res, next) => {

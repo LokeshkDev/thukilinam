@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
-import { Plus, Search, Edit2, Trash2, ExternalLink, X, Save, Image as ImageIcon } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ExternalLink, X, Save, Image as ImageIcon, UploadCloud, CheckCircle } from 'lucide-react';
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -30,6 +30,8 @@ const Products = () => {
   
   const [attributes, setAttributes] = useState([{ name: 'Size', values: [] }]);
   const [bulkActionData, setBulkActionData] = useState({ price: '', stock: '', discount: '' });
+  const [productImages, setProductImages] = useState([]);
+  const [pickingVariantIdx, setPickingVariantIdx] = useState(null);
 
   const currentAttrNames = attributes.filter(a => a.name && a.values.length > 0).map(a => a.name).sort();
   const variantAttrNames = formData.variants?.length > 0 ? Object.keys(typeof formData.variants[0].attributes === 'string' ? JSON.parse(formData.variants[0].attributes) : (formData.variants[0].attributes || {})).sort() : [];
@@ -122,6 +124,15 @@ const Products = () => {
     } catch (err) {
       console.error('Error fetching variants:', err);
     }
+
+    try {
+      const detailRes = await api.get(`/products/${product.id}/images`);
+      if (detailRes.data.success) {
+        setProductImages(detailRes.data.images || []);
+      }
+    } catch (err) {
+      console.error('Error fetching product images:', err);
+    }
     
     setShowModal(true);
   };
@@ -168,6 +179,8 @@ const Products = () => {
         }
       });
 
+      data.append('product_images', JSON.stringify(productImages));
+
       if (currentProduct) {
         await api.put(`/products/${currentProduct.id}`, data, {
           headers: { 'Content-Type': 'multipart/form-data' }
@@ -203,6 +216,58 @@ const Products = () => {
       variants: []
     });
     setAttributes([{ name: 'Size', values: [] }]);
+    setProductImages([]);
+  };
+
+  const handleProductImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    
+    for (const file of files) {
+      const data = new FormData();
+      data.append('file', file);
+      
+      const tempId = 'temp-' + Date.now() + '-' + Math.round(Math.random() * 1e5);
+      setProductImages(prev => [...prev, { id: tempId, image_url: '', is_loading: true }]);
+      
+      try {
+        const res = await api.post('/upload?folder=products', data, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        if (res.data.success) {
+          setProductImages(prev => {
+            const list = prev.filter(img => img.id !== tempId);
+            const hasPrimary = list.some(img => img.is_primary === 1);
+            return [...list, {
+              id: 'new-' + Date.now() + '-' + Math.round(Math.random() * 1e5),
+              image_url: res.data.url,
+              is_primary: hasPrimary ? 0 : 1
+            }];
+          });
+        }
+      } catch (err) {
+        console.error('Error uploading product image:', err);
+        setProductImages(prev => prev.filter(img => img.id !== tempId));
+        alert('Failed to upload image. Please try again.');
+      }
+    }
+  };
+
+  const makeImagePrimary = (index) => {
+    setProductImages(prev => prev.map((img, idx) => ({
+      ...img,
+      is_primary: idx === index ? 1 : 0
+    })));
+  };
+
+  const deleteProductImage = (index) => {
+    setProductImages(prev => {
+      const list = prev.filter((_, idx) => idx !== index);
+      if (prev[index]?.is_primary === 1 && list.length > 0) {
+        list[0].is_primary = 1;
+      }
+      return list;
+    });
   };
 
   return (
@@ -399,6 +464,89 @@ const Products = () => {
                         value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       ></textarea>
+                    </div>
+                    
+                    {/* Product Gallery Images & Primary Selection */}
+                    <div className="col-12">
+                      <div className="card border shadow-sm rounded-3 overflow-hidden mb-3">
+                        <div className="card-header bg-white border-bottom py-3">
+                          <h6 className="fw-bold mb-0 text-dark d-flex align-items-center">
+                            <ImageIcon size={18} className="text-primary me-2" /> Product Gallery Images & Primary Selection
+                          </h6>
+                          <small className="text-muted text-xs">Upload high-resolution images. The highlighted primary image represents the default storefront display.</small>
+                        </div>
+                        <div className="card-body bg-light-subtle">
+                          <div className="row g-3">
+                            {productImages.map((img, idx) => (
+                              <div key={img.id} className="col-6 col-sm-4 col-md-3" style={{ minWidth: '150px' }}>
+                                <div className={`card h-100 border position-relative overflow-hidden transition-all shadow-sm ${img.is_primary ? 'border-primary ring-2' : 'border-light-subtle'}`} style={{ minHeight: '160px' }}>
+                                  {img.is_loading ? (
+                                    <div className="d-flex flex-column align-items-center justify-content-center h-100 p-3" style={{ minHeight: '160px' }}>
+                                      <div className="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+                                      <span className="text-muted small fs-7">Uploading...</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div className="position-relative" style={{ height: '110px' }}>
+                                        <img 
+                                          src={img.image_url} 
+                                          alt="Product" 
+                                          className="w-100 h-100 object-fit-cover" 
+                                        />
+                                        
+                                        {/* Image Action Overlays */}
+                                        <div className="position-absolute top-0 end-0 p-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => deleteProductImage(idx)}
+                                            className="btn btn-danger btn-sm p-1 rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                                            style={{ width: '24px', height: '24px', opacity: 0.9 }}
+                                            title="Delete image"
+                                          >
+                                            <Trash2 size={12} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="card-body p-2 d-flex flex-column justify-content-between align-items-center bg-white border-top">
+                                        {img.is_primary ? (
+                                          <span className="badge bg-primary w-100 py-1.5 fs-7 d-flex align-items-center justify-content-center">
+                                            <CheckCircle size={12} className="me-1" /> Primary
+                                          </span>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => makeImagePrimary(idx)}
+                                            className="btn btn-outline-secondary btn-sm w-100 py-0.5 fs-7 text-nowrap"
+                                          >
+                                            Set Primary
+                                          </button>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            
+                            {/* Upload Button Card */}
+                            <div className="col-6 col-sm-4 col-md-3" style={{ minWidth: '150px' }}>
+                              <label className="card h-100 border border-dashed border-2 d-flex flex-column align-items-center justify-content-center text-center p-3 cursor-pointer hover-bg-light transition-all text-muted" style={{ minHeight: '160px', borderStyle: 'dashed', cursor: 'pointer' }}>
+                                <input 
+                                  type="file" 
+                                  className="d-none" 
+                                  multiple 
+                                  accept="image/*" 
+                                  onChange={handleProductImageUpload} 
+                                />
+                                <UploadCloud size={32} className="text-primary mb-2" />
+                                <span className="fw-semibold small text-primary">Upload Images</span>
+                                <span className="fs-7 text-muted mt-1">PNG, JPG, WebP</span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     
                     {/* Advanced Variants Section */}
@@ -623,11 +771,38 @@ const Products = () => {
                                     <tr key={idx} className="border-bottom">
                                       <td className="small fw-bold">{comboStr}</td>
                                       <td>
-                                        <input type="file" className="form-control form-control-sm" style={{ width: '120px' }} onChange={(e) => {
-                                          const updated = [...formData.variants];
-                                          updated[idx].image_file = e.target.files[0];
-                                          setFormData(prev => ({ ...prev, variants: updated }));
-                                        }} />
+                                        <div className="d-flex align-items-center gap-1">
+                                          {(() => {
+                                            const imgs = (() => {
+                                              const imgVal = v.image_url;
+                                              if (!imgVal) return [];
+                                              try { if (imgVal.startsWith('[')) return JSON.parse(imgVal); } catch(e){}
+                                              return imgVal.split(',').map(s => s.trim()).filter(Boolean);
+                                            })();
+                                            
+                                            if (imgs.length === 0) {
+                                              return <span className="text-muted small text-xs italic">No image</span>;
+                                            }
+                                            
+                                            return (
+                                              <div className="d-flex gap-1" style={{ maxWidth: '60px', overflow: 'hidden' }}>
+                                                {imgs.slice(0, 2).map((url, i) => (
+                                                  <img key={i} src={url} alt="" className="rounded-1 border" style={{ width: '28px', height: '28px', objectFit: 'cover' }} />
+                                                ))}
+                                                {imgs.length > 2 && <span className="text-muted small align-self-center" style={{ fontSize: '10px' }}>+{imgs.length - 2}</span>}
+                                              </div>
+                                            );
+                                          })()}
+                                          <button 
+                                            type="button" 
+                                            onClick={() => setPickingVariantIdx(idx)}
+                                            className="btn btn-sm btn-outline-secondary p-1 d-flex align-items-center justify-content-center border-0"
+                                            style={{ width: '28px', height: '28px' }}
+                                            title="Manage Variant Images"
+                                          >
+                                            <ImageIcon size={14} />
+                                          </button>
+                                        </div>
                                       </td>
                                       <td>
                                         <input type="text" className="form-control form-control-sm" style={{ width: '100px' }} value={v.sku} onChange={(e) => {
@@ -750,6 +925,179 @@ const Products = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pickingVariantIdx !== null && (
+        <div className="modal d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1100 }}>
+          <div className="modal-dialog modal-md modal-dialog-centered">
+            <div className="modal-content border-0 rounded-4 shadow-lg">
+              <div className="modal-header border-0 pb-0">
+                <h6 className="modal-title fw-bold text-dark d-flex align-items-center">
+                  <ImageIcon size={18} className="text-primary me-2" /> Manage Variant Images
+                </h6>
+                <button type="button" className="btn-close" onClick={() => setPickingVariantIdx(null)}></button>
+              </div>
+              <div className="modal-body">
+                <p className="text-muted small mb-3">
+                  Select one or more images from the product gallery for this variant, or upload new variant-specific images.
+                </p>
+                
+                {/* Currently Selected Variant Images */}
+                <div className="mb-4">
+                  <label className="form-label small fw-bold text-muted d-block">Selected for this Variant ({
+                    (() => {
+                      const v = formData.variants[pickingVariantIdx];
+                      const imgVal = v?.image_url;
+                      if (!imgVal) return 0;
+                      try { if (imgVal.startsWith('[')) return JSON.parse(imgVal).length; } catch(e){}
+                      return imgVal.split(',').filter(Boolean).length;
+                    })()
+                  })</label>
+                  <div className="d-flex flex-wrap gap-2 p-2 border rounded-3 bg-light" style={{ minHeight: '60px' }}>
+                    {(() => {
+                      const v = formData.variants[pickingVariantIdx];
+                      if (!v) return null;
+                      const imgs = (() => {
+                        const imgVal = v.image_url;
+                        if (!imgVal) return [];
+                        try { if (imgVal.startsWith('[')) return JSON.parse(imgVal); } catch(e){}
+                        return imgVal.split(',').map(s => s.trim()).filter(Boolean);
+                      })();
+                      
+                      if (imgs.length === 0) {
+                        return <span className="text-muted small m-auto">No images selected for this variant.</span>;
+                      }
+                      
+                      return imgs.map((url, i) => (
+                        <div key={i} className="position-relative" style={{ width: '50px', height: '50px' }}>
+                          <img src={url} className="w-100 h-100 object-fit-cover rounded-2 border" alt="" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...formData.variants];
+                              const nextImgs = imgs.filter((_, idx) => idx !== i);
+                              updated[pickingVariantIdx].image_url = JSON.stringify(nextImgs);
+                              setFormData({ ...formData, variants: updated });
+                            }}
+                            className="position-absolute top-0 end-0 btn btn-danger p-0 rounded-circle d-flex align-items-center justify-content-center text-white border-0"
+                            style={{ width: '16px', height: '16px', marginTop: '-6px', marginRight: '-6px', padding: 0 }}
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+                
+                {/* Choose from Product Gallery */}
+                <div className="mb-4">
+                  <label className="form-label small fw-bold text-muted">Select from Product Gallery</label>
+                  {productImages.length === 0 ? (
+                    <div className="text-center p-3 border rounded-3 bg-light-subtle">
+                      <span className="text-muted small">No product gallery images uploaded yet.</span>
+                    </div>
+                  ) : (
+                    <div className="row g-2 overflow-auto" style={{ maxHeight: '180px' }}>
+                      {productImages.map((img) => {
+                        const v = formData.variants[pickingVariantIdx];
+                        const imgs = v ? (() => {
+                          const imgVal = v.image_url;
+                          if (!imgVal) return [];
+                          try { if (imgVal.startsWith('[')) return JSON.parse(imgVal); } catch(e){}
+                          return imgVal.split(',').map(s => s.trim()).filter(Boolean);
+                        })() : [];
+                        const isSelected = imgs.includes(img.image_url);
+                        
+                        return (
+                          <div key={img.id} className="col-3">
+                            <div 
+                              onClick={() => {
+                                const updated = [...formData.variants];
+                                const nextImgs = isSelected 
+                                  ? imgs.filter(url => url !== img.image_url)
+                                  : [...imgs, img.image_url];
+                                updated[pickingVariantIdx].image_url = JSON.stringify(nextImgs);
+                                setFormData({ ...formData, variants: updated });
+                              }}
+                              className={`card p-0 border overflow-hidden cursor-pointer position-relative h-100 ${isSelected ? 'border-primary ring-2' : 'border-light'}`}
+                              style={{ height: '70px', cursor: 'pointer' }}
+                            >
+                              <img src={img.image_url} className="w-100 h-100 object-fit-cover" alt="" />
+                              {isSelected && (
+                                <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-primary bg-opacity-25">
+                                  <CheckCircle size={18} className="text-primary bg-white rounded-circle" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Upload New Specifically for Variant */}
+                <div>
+                  <label className="form-label small fw-bold text-muted">Upload New Images for this Variant</label>
+                  <input 
+                    type="file" 
+                    className="form-control form-control-sm" 
+                    multiple 
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files);
+                      if (!files.length) return;
+                      
+                      for (const file of files) {
+                        const data = new FormData();
+                        data.append('file', file);
+                        
+                        try {
+                          const res = await api.post('/upload?folder=products', data, {
+                            headers: { 'Content-Type': 'multipart/form-data' }
+                          });
+                          if (res.data.success) {
+                            const newUrl = res.data.url;
+                            
+                            // Add to main product gallery first so it's visible & selectable
+                            setProductImages(prev => {
+                              const hasPrimary = prev.some(img => img.is_primary === 1);
+                              return [...prev, {
+                                id: 'new-' + Date.now() + '-' + Math.round(Math.random() * 1e5),
+                                image_url: newUrl,
+                                is_primary: hasPrimary ? 0 : 1
+                              }];
+                            });
+                            
+                            // Add to this variant's image list
+                            const updated = [...formData.variants];
+                            const v = updated[pickingVariantIdx];
+                            const imgs = (() => {
+                              const imgVal = v.image_url;
+                              if (!imgVal) return [];
+                              try { if (imgVal.startsWith('[')) return JSON.parse(imgVal); } catch(e){}
+                              return imgVal.split(',').map(s => s.trim()).filter(Boolean);
+                            })();
+                            
+                            updated[pickingVariantIdx].image_url = JSON.stringify([...imgs, newUrl]);
+                            setFormData({ ...formData, variants: updated });
+                          }
+                        } catch (err) {
+                          console.error('Error uploading variant image:', err);
+                          alert('Upload failed.');
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer border-0 pt-0">
+                <button type="button" className="btn btn-primary rounded-pill px-4" onClick={() => setPickingVariantIdx(null)}>Done</button>
+              </div>
             </div>
           </div>
         </div>

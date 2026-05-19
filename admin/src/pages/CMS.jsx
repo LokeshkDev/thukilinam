@@ -78,6 +78,50 @@ const CMS = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState(defaultSettings);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingId, setUploadingId] = useState(null);
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    const data = new FormData();
+    data.append('file', file);
+    try {
+      const res = await api.post('/upload?folder=cms', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        updateGroup('header', 'logo_image', res.data.url);
+      }
+    } catch (err) {
+      console.error('Error uploading logo:', err);
+      alert('Failed to upload logo image.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleCollectionImageUpload = async (id, e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingId(id);
+    const data = new FormData();
+    data.append('file', file);
+    try {
+      const res = await api.post('/upload?folder=cms', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        updateCollection(id, 'image', res.data.url);
+      }
+    } catch (err) {
+      console.error('Error uploading collection image:', err);
+      alert('Failed to upload image. Please try again.');
+    } finally {
+      setUploadingId(null);
+    }
+  };
 
   useEffect(() => {
     fetchSettings();
@@ -209,7 +253,17 @@ const CMS = () => {
               <label className="form-label">Announcement Bar Text</label>
               <input className="form-control mb-3" value={settings.header.announcement || ''} onChange={(e) => updateGroup('header', 'announcement', e.target.value)} />
               <label className="form-label">Logo Text</label>
-              <input className="form-control" value={settings.header.logo_text || ''} onChange={(e) => updateGroup('header', 'logo_text', e.target.value)} />
+              <input className="form-control mb-3" value={settings.header.logo_text || ''} onChange={(e) => updateGroup('header', 'logo_text', e.target.value)} />
+              
+              <label className="form-label">Logo Image</label>
+              <input type="file" className="form-control mb-2" accept="image/*" onChange={handleLogoUpload} />
+              {uploadingLogo && <div className="spinner-border spinner-border-sm text-primary mb-2 animate__animated animate__spin" />}
+              <input className="form-control" placeholder="Or paste Logo Image URL" value={settings.header.logo_image || ''} onChange={(e) => updateGroup('header', 'logo_image', e.target.value)} />
+              {settings.header.logo_image && (
+                <div className="mt-2 p-2 bg-light rounded text-center">
+                  <img src={settings.header.logo_image} alt="Logo Preview" style={{ maxHeight: '50px', objectFit: 'contain' }} className="rounded animate__animated animate__fadeIn" />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -322,21 +376,30 @@ const CMS = () => {
                             />
                           </td>
                           <td>
-                            <div className="d-flex align-items-center gap-2">
-                              {col.image && (
-                                <span className="d-inline-block border rounded overflow-hidden" style={{ width: '32px', height: '32px', flexShrink: 0 }}>
-                                  <img 
-                                    src={col.image.startsWith('http') ? col.image : `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}${col.image}`} 
-                                    alt="Preview" 
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                                    onError={(e) => { e.target.style.display = 'none'; }}
-                                  />
-                                </span>
-                              )}
+                            <div className="d-flex flex-column gap-1">
+                              <div className="d-flex align-items-center gap-2">
+                                {col.image && (
+                                  <span className="d-inline-block border rounded overflow-hidden" style={{ width: '32px', height: '32px', flexShrink: 0 }}>
+                                    <img 
+                                      src={col.image.startsWith('http') ? col.image : `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}${col.image}`} 
+                                      alt="Preview" 
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                      onError={(e) => { e.target.style.display = 'none'; }}
+                                    />
+                                  </span>
+                                )}
+                                <input 
+                                  type="file" 
+                                  className="form-control form-control-sm" 
+                                  accept="image/*"
+                                  onChange={(e) => handleCollectionImageUpload(col.id, e)}
+                                />
+                                {uploadingId === col.id && <div className="spinner-border spinner-border-sm text-primary" />}
+                              </div>
                               <input 
                                 type="text" 
                                 className="form-control form-control-sm" 
-                                placeholder="e.g. /uploads/... or http..." 
+                                placeholder="Or enter Image URL" 
                                 value={col.image} 
                                 onChange={(e) => updateCollection(col.id, 'image', e.target.value)}
                               />

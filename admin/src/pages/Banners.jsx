@@ -7,6 +7,7 @@ const Banners = () => {
   const [loading, setLoading] = useState(true);
   const [editingBanner, setEditingBanner] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -77,6 +78,27 @@ const Banners = () => {
     } catch (err) {
       console.error('Failed to save banner:', err);
       alert('Failed to save banner');
+    }
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const data = new FormData();
+    data.append('file', file);
+    try {
+      const res = await api.post('/upload?folder=banners', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success) {
+        setFormData(prev => ({ ...prev, image_url: res.data.url }));
+      }
+    } catch (err) {
+      console.error('Error uploading banner image:', err);
+      alert('Failed to upload image. Please try again.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -226,15 +248,27 @@ const Banners = () => {
                         />
                       </div>
                       <div className="col-12">
-                        <label className="form-label fw-semibold">Image URL (Required)</label>
+                        <label className="form-label fw-semibold">Banner Image (Required)</label>
+                        <input 
+                          type="file" 
+                          className="form-control mb-2" 
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                        />
+                        {uploading && <div className="spinner-border spinner-border-sm text-primary mb-2" role="status"><span className="visually-hidden">Uploading...</span></div>}
                         <input 
                           type="text" 
                           className="form-control" 
                           value={formData.image_url} 
                           onChange={(e) => setFormData({...formData, image_url: e.target.value})} 
                           required 
-                          placeholder="https://example.com/banner.jpg or /uploads/banner.jpg"
+                          placeholder="https://pub-...r2.dev/banner.jpg"
                         />
+                        {formData.image_url && (
+                          <div className="mt-2 text-center bg-light p-2 rounded-3">
+                            <img src={formData.image_url} alt="Banner Preview" style={{ maxHeight: '150px', maxWidth: '100%', objectFit: 'contain' }} className="rounded animate__animated animate__fadeIn" />
+                          </div>
+                        )}
                       </div>
                       <div className="col-md-6">
                         <label className="form-label fw-semibold">Redirect Link (Optional)</label>
