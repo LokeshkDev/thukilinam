@@ -1,6 +1,8 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import api from '../api/axios';
 import { useAuth } from './AuthContext';
+import { useSettings } from './SettingsContext';
+import { getShippingSettings, calculateShipping } from '../utils/shipping';
 
 const CartContext = createContext();
 
@@ -8,8 +10,10 @@ export const useCart = () => useContext(CartContext);
 
 export const CartProvider = ({ children }) => {
   const { user } = useAuth();
+  const { settings } = useSettings();
+  const shippingSettings = getShippingSettings(settings);
   const [cartItems, setCartItems] = useState([]);
-  const [summary, setSummary] = useState({ subtotal: 0, shipping: 0, tax: 0, total: 0, itemCount: 0 });
+  const [summary, setSummary] = useState({ subtotal: 0, shipping: 0, total: 0, itemCount: 0 });
   const [loading, setLoading] = useState(false);
   const [coupon, setCoupon] = useState(null);
   const [couponError, setCouponError] = useState('');
@@ -20,7 +24,7 @@ export const CartProvider = ({ children }) => {
       fetchCart();
     } else {
       setCartItems([]);
-      setSummary({ subtotal: 0, shipping: 0, tax: 0, total: 0, itemCount: 0 });
+      setSummary({ subtotal: 0, shipping: 0, total: 0, itemCount: 0 });
       setCoupon(null);
       setCouponError('');
     }
@@ -31,28 +35,33 @@ export const CartProvider = ({ children }) => {
     if (cartItems.length > 0) {
       recalcSummary(cartItems);
     }
-  }, [coupon]);
+  }, [coupon, settings]);
 
   const recalcSummary = (items) => {
     const subtotal = items.reduce((sum, i) => {
       const price = parseFloat(i.variant_sale_price || i.variant_price || i.discount_price || i.price || 0);
       return sum + price * i.quantity;
     }, 0);
-    let shipping = subtotal >= 2999 ? 0 : 149;
+    const couponFreeShipping = Boolean(coupon?.is_free_shipping);
+    let shipping = calculateShipping(subtotal, shippingSettings, { couponFreeShipping });
     let discount = 0;
 
     if (coupon) {
-      if (coupon.is_free_shipping) {
-        shipping = 0;
-      }
       discount = coupon.discount || 0;
     }
 
-    const tax = parseFloat((subtotal * 0.05).toFixed(2));
-    const total = Math.max(0, subtotal - discount + shipping + tax);
+    const total = Math.max(0, subtotal - discount + shipping);
     const itemCount = items.reduce((total, item) => total + Number(item.quantity || 0), 0);
 
-    setSummary({ subtotal, shipping, tax, total, discount, itemCount });
+    setSummary({
+      subtotal,
+      shipping,
+      total,
+      discount,
+      itemCount,
+      freeThreshold: shippingSettings.free_threshold,
+      standardCost: shippingSettings.standard_cost
+    });
   };
 
   const fetchCart = async () => {
@@ -116,7 +125,7 @@ export const CartProvider = ({ children }) => {
       const response = await api.delete('/cart');
       if (response.data.success) {
         setCartItems([]);
-        setSummary({ subtotal: 0, shipping: 0, tax: 0, total: 0, discount: 0, itemCount: 0 });
+        setSummary({ subtotal: 0, shipping: 0, total: 0, discount: 0, itemCount: 0 });
         setCoupon(null);
         setCouponError('');
       }

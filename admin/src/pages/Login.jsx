@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import api from '../api/axios';
 import { Lock, Mail, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Login = () => {
   const { login } = useAdminAuth();
@@ -54,7 +55,10 @@ const Login = () => {
             </div>
           </div>
           <div className="mb-5">
-            <label className="form-label small fw-bold">Password</label>
+            <div className="d-flex justify-content-between align-items-center">
+              <label className="form-label small fw-bold">Password</label>
+              <Link to="/forgot-password" className="small fw-bold text-decoration-none">Forgot?</Link>
+            </div>
             <div className="input-group">
               <span className="input-group-text bg-light border-0"><Lock size={18} className="text-muted" /></span>
               <input 

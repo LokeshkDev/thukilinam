@@ -60,12 +60,14 @@ const ProductCard = ({ product }) => {
         <p className="product-category">{product.category_name}</p>
         <div className="price-row">
           <strong>Rs. {Number(price || 0).toLocaleString('en-IN')}</strong>
-          <div className="product-rating">
-            <svg className="icon fill-star" aria-hidden="true">
-              <use href="#icon-star"></use>
-            </svg>
-            <span>{product.rating || product.avg_rating || '4.5'}</span>
-          </div>
+          {(product.avg_rating > 0 || product.rating > 0) && (
+            <div className="product-rating">
+              <svg className="icon fill-star" aria-hidden="true">
+                <use href="#icon-star"></use>
+              </svg>
+              <span>{product.avg_rating || product.rating}</span>
+            </div>
+          )}
         </div>
         <button className="cart-button" type="button" onClick={handleAddToCart} disabled={adding || product.stock === 0}>
           {product.stock === 0 ? 'Out of stock' : added ? 'Added' : adding ? 'Adding...' : 'Add to bag'}

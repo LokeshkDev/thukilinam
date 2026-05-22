@@ -1,13 +1,29 @@
 import React, { useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
-import { Menu, ChevronDown, LogOut, Shield } from 'lucide-react';
+import { Menu, ChevronDown, LogOut, Shield, KeyRound } from 'lucide-react';
 import Sidebar from './Sidebar';
 import { useAdminAuth } from '../context/AdminAuthContext';
+import api from '../api/axios';
 
 const AdminLayout = () => {
   const { admin, logout, loading } = useAdminAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 992);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+
+  const requestPasswordReset = async () => {
+    setResetLoading(true);
+    setResetMessage('');
+    try {
+      const res = await api.post('/auth/forgot-password', { email: admin.email });
+      setResetMessage(res.data.message || 'Password reset link sent to your admin email.');
+    } catch (err) {
+      setResetMessage(err.response?.data?.message || 'Unable to send reset link. Please try again.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   if (loading) return <div className="d-flex justify-content-center align-items-center min-vh-100"><div className="spinner-border text-primary"></div></div>;
 
@@ -72,6 +88,20 @@ const AdminLayout = () => {
                     <p className="mb-0 fw-bold small">{admin.name}</p>
                     <small className="text-muted" style={{ fontSize: '11px' }}>{admin.role || 'Administrator'}</small>
                   </div>
+                  <button
+                    onClick={requestPasswordReset}
+                    className="dropdown-item text-dark d-flex align-items-center gap-2 rounded py-2 w-100 text-start border-0 bg-transparent"
+                    disabled={resetLoading}
+                    type="button"
+                  >
+                    <KeyRound size={16} />
+                    <span className="fw-semibold">{resetLoading ? 'Sending Link...' : 'Reset Password'}</span>
+                  </button>
+                  {resetMessage && (
+                    <div className="px-3 py-2 small text-muted" style={{ lineHeight: 1.4 }}>
+                      {resetMessage}
+                    </div>
+                  )}
                   <button 
                     onClick={() => {
                       setIsProfileOpen(false);

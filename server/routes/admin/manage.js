@@ -62,18 +62,22 @@ router.get('/banners', adminAuth, async (req, res, next) => {
 
 router.post('/banners', adminAuth, async (req, res, next) => {
   try {
-    const { title, subtitle, image_url, link, sort_order } = req.body;
-    const [r] = await pool.query('INSERT INTO banners (title, subtitle, image_url, link, sort_order) VALUES (?,?,?,?,?)',
-      [title || null, subtitle || null, image_url, link || null, sort_order || 0]);
+    const { title, subtitle, image_url, mobile_image_url, link, sort_order } = req.body;
+    const [r] = await pool.query(
+      'INSERT INTO banners (title, subtitle, image_url, mobile_image_url, link, sort_order) VALUES (?,?,?,?,?,?)',
+      [title || null, subtitle || null, image_url, mobile_image_url || null, link || null, sort_order || 0]
+    );
     res.status(201).json({ success: true, id: r.insertId });
   } catch (err) { next(err); }
 });
 
 router.put('/banners/:id', adminAuth, async (req, res, next) => {
   try {
-    const { title, subtitle, image_url, link, sort_order, is_active } = req.body;
-    await pool.query('UPDATE banners SET title=?,subtitle=?,image_url=?,link=?,sort_order=?,is_active=? WHERE id=?',
-      [title || null, subtitle || null, image_url, link || null, sort_order || 0, is_active !== undefined ? is_active : 1, req.params.id]);
+    const { title, subtitle, image_url, mobile_image_url, link, sort_order, is_active } = req.body;
+    await pool.query(
+      'UPDATE banners SET title=?,subtitle=?,image_url=?,mobile_image_url=?,link=?,sort_order=?,is_active=? WHERE id=?',
+      [title || null, subtitle || null, image_url, mobile_image_url || null, link || null, sort_order || 0, is_active !== undefined ? is_active : 1, req.params.id]
+    );
     res.json({ success: true, message: 'Banner updated.' });
   } catch (err) { next(err); }
 });
@@ -102,12 +106,12 @@ router.get('/reviews', adminAuth, async (req, res, next) => {
 router.put('/reviews/:id/approve', adminAuth, async (req, res, next) => {
   try {
     await pool.query('UPDATE reviews SET is_approved=1 WHERE id=?', [req.params.id]);
-    // Update product avg_rating
+    // Update product avg_rating and review_count
     const [rev] = await pool.query('SELECT product_id FROM reviews WHERE id=?', [req.params.id]);
     if (rev.length) {
       await pool.query(`
         UPDATE products p SET
-          avg_rating = (SELECT AVG(rating) FROM reviews WHERE product_id=p.id AND is_approved=1),
+          avg_rating = (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE product_id=p.id AND is_approved=1),
           review_count = (SELECT COUNT(*) FROM reviews WHERE product_id=p.id AND is_approved=1)
         WHERE p.id=?
       `, [rev[0].product_id]);
@@ -116,9 +120,27 @@ router.put('/reviews/:id/approve', adminAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Decline (reject) a review — sets is_approved=0, keeps it in DB as declined
+router.put('/reviews/:id/decline', adminAuth, async (req, res, next) => {
+  try {
+    await pool.query('UPDATE reviews SET is_approved=0 WHERE id=?', [req.params.id]);
+    res.json({ success: true, message: 'Review declined.' });
+  } catch (err) { next(err); }
+});
+
 router.delete('/reviews/:id', adminAuth, async (req, res, next) => {
   try {
+    const [rev] = await pool.query('SELECT product_id FROM reviews WHERE id=?', [req.params.id]);
     await pool.query('DELETE FROM reviews WHERE id=?', [req.params.id]);
+    // Recalculate product rating after deletion
+    if (rev.length) {
+      await pool.query(`
+        UPDATE products p SET
+          avg_rating = (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE product_id=p.id AND is_approved=1),
+          review_count = (SELECT COUNT(*) FROM reviews WHERE product_id=p.id AND is_approved=1)
+        WHERE p.id=?
+      `, [rev[0].product_id]);
+    }
     res.json({ success: true, message: 'Review deleted.' });
   } catch (err) { next(err); }
 });

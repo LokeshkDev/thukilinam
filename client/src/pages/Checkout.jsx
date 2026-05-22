@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
+import ShippingNote from '../components/ui/ShippingNote';
 
 const formatPrice = (value = 0) => `Rs. ${Number(value).toLocaleString('en-IN')}`;
 
@@ -101,7 +102,8 @@ const Checkout = () => {
           pincode: formData.pincode,
           country: 'India'
         },
-        payment_method: formData.payment_method
+        payment_method: formData.payment_method,
+        ...(coupon?.code ? { coupon_code: coupon.code } : {})
       };
       
       const res = await api.post('/orders', orderData);
@@ -309,6 +311,12 @@ const Checkout = () => {
               ))}
             </div>
 
+            <ShippingNote
+              subtotal={summary.subtotal}
+              shipping={summary.shipping}
+              couponFreeShipping={coupon?.is_free_shipping}
+            />
+
             <dl className="summary-list">
               <div>
                 <dt>Subtotal ({summary.itemCount} items)</dt>
@@ -316,9 +324,13 @@ const Checkout = () => {
               </div>
               <div>
                 <dt>Shipping</dt>
-                <dd style={coupon?.is_free_shipping ? { color: '#16a34a', fontWeight: 600 } : {}}>
+                <dd style={summary.shipping === 0 ? { color: '#16a34a', fontWeight: 600 } : {}}>
                   {summary.shipping === 0
-                    ? (coupon?.is_free_shipping ? 'Free (Coupon)' : 'Complimentary')
+                    ? (coupon?.is_free_shipping
+                      ? 'Free (Coupon)'
+                      : summary.subtotal >= (summary.freeThreshold || 0) && summary.freeThreshold > 0
+                        ? 'Free shipping'
+                        : 'Complimentary')
                     : formatPrice(summary.shipping)}
                 </dd>
               </div>
@@ -328,10 +340,6 @@ const Checkout = () => {
                   <dd style={{ color: '#16a34a', fontWeight: 600 }}>-{formatPrice(Number(summary.discount))}</dd>
                 </div>
               )}
-              <div>
-                <dt>Estimated Tax (5%)</dt>
-                <dd>{formatPrice(summary.tax)}</dd>
-              </div>
               <div className="summary-total">
                 <dt>Total Payable</dt>
                 <dd>{formatPrice(summary.total)}</dd>

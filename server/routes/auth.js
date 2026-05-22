@@ -4,9 +4,15 @@ const crypto = require('crypto');
 const { body } = require('express-validator');
 const pool = require('../database/connection');
 const { signUserToken } = require('../utils/jwtUtils');
-const { sendResetEmail } = require('../utils/emailUtils');
+const { sendResetEmail, sendWelcomeEmail, sendNewUserNotificationEmail } = require('../utils/emailUtils');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
+
+const createResetToken = () => {
+  const token = crypto.randomBytes(32).toString('base64url');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  return { token, tokenHash };
+};
 
 // POST /api/auth/register
 router.post('/register', [
@@ -26,6 +32,12 @@ router.post('/register', [
       [name, email, hash, phone || null]
     );
     const token = signUserToken({ id: result.insertId, name, email });
+    try {
+      await sendWelcomeEmail(email, name);
+      await sendNewUserNotificationEmail({ id: result.insertId, name, email, phone });
+    } catch (mailErr) {
+      console.error('Registration email failed:', mailErr.message);
+    }
     res.status(201).json({ success: true, message: 'Registration successful!', token, user: { id: result.insertId, name, email, phone } });
   } catch (err) { next(err); }
 });
@@ -69,12 +81,12 @@ router.post('/forgot-password', [
     const [rows] = await pool.query('SELECT * FROM users WHERE email=?', [email]);
     if (!rows.length) return res.json({ success: true, message: 'If this email exists, a reset link has been sent.' });
 
-    const token = crypto.randomBytes(32).toString('hex');
+    const { token, tokenHash } = createResetToken();
     const expiry = new Date(Date.now() + 3600000); // 1 hour
-    await pool.query('UPDATE users SET reset_token=?, reset_token_expiry=? WHERE id=?', [token, expiry, rows[0].id]);
+    await pool.query('UPDATE users SET reset_token=?, reset_token_expiry=? WHERE id=?', [tokenHash, expiry, rows[0].id]);
 
-    const resetLink = `${process.env.CLIENT_URL}/reset-password?token=${token}`;
-    await sendResetEmail(email, rows[0].name, resetLink);
+    const resetLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${encodeURIComponent(token)}`;
+    await sendResetEmail(email, rows[0].name, resetLink, { accountLabel: 'Thukilinam customer account' });
     res.json({ success: true, message: 'If this email exists, a reset link has been sent.' });
   } catch (err) { next(err); }
 });
@@ -87,8 +99,9 @@ router.post('/reset-password', [
 ], async (req, res, next) => {
   try {
     const { token, password } = req.body;
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const [rows] = await pool.query(
-      'SELECT * FROM users WHERE reset_token=? AND reset_token_expiry > NOW()', [token]
+      'SELECT * FROM users WHERE reset_token=? AND reset_token_expiry > NOW()', [tokenHash]
     );
     if (!rows.length) return res.status(400).json({ success: false, message: 'Invalid or expired reset link.' });
 

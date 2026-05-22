@@ -2,6 +2,7 @@ const router = require('express').Router();
 const pool = require('../../database/connection');
 const adminAuth = require('../../middleware/adminAuth');
 const bcrypt = require('bcryptjs');
+const { sendWelcomeEmail, sendNewUserNotificationEmail } = require('../../utils/emailUtils');
 
 // GET /api/admin/users
 router.get('/', adminAuth, async (req, res, next) => {
@@ -38,6 +39,12 @@ router.post('/', adminAuth, async (req, res, next) => {
       'INSERT INTO users (name, email, password_hash, phone) VALUES (?,?,?,?)',
       [name, email, hash, phone || null]
     );
+    try {
+      await sendWelcomeEmail(email, name);
+      await sendNewUserNotificationEmail({ id: result.insertId, name, email, phone });
+    } catch (mailErr) {
+      console.error('Customer creation email failed:', mailErr.message);
+    }
     res.status(201).json({ success: true, message: 'Customer created successfully.', id: result.insertId });
   } catch (err) { next(err); }
 });

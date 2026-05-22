@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import ShippingNote from '../components/ui/ShippingNote';
 
 const formatPrice = (value = 0) => `Rs. ${Number(value).toLocaleString('en-IN')}`;
 
@@ -145,6 +146,12 @@ const Cart = () => {
               <p className="eyebrow">Checkout</p>
               <h2>Order Summary</h2>
 
+              <ShippingNote
+                subtotal={summary.subtotal}
+                shipping={summary.shipping}
+                couponFreeShipping={coupon?.is_free_shipping}
+              />
+
               <dl className="summary-list">
                 <div>
                   <dt>Subtotal ({summary.itemCount} items)</dt>
@@ -152,9 +159,13 @@ const Cart = () => {
                 </div>
                 <div>
                   <dt>Shipping</dt>
-                  <dd style={coupon?.is_free_shipping ? { color: '#16a34a', fontWeight: 600 } : {}}>
+                  <dd style={summary.shipping === 0 ? { color: '#16a34a', fontWeight: 600 } : {}}>
                     {summary.shipping === 0
-                      ? (coupon?.is_free_shipping ? 'Free (Coupon)' : 'Complimentary')
+                      ? (coupon?.is_free_shipping
+                        ? 'Free (Coupon)'
+                        : summary.subtotal >= (summary.freeThreshold || 0) && summary.freeThreshold > 0
+                          ? 'Free shipping'
+                          : 'Complimentary')
                       : formatPrice(summary.shipping)}
                   </dd>
                 </div>
@@ -164,10 +175,6 @@ const Cart = () => {
                     <dd style={{ color: '#16a34a', fontWeight: 600 }}>-{formatPrice(summary.discount)}</dd>
                   </div>
                 )}
-                <div>
-                  <dt>Estimated Tax</dt>
-                  <dd>{formatPrice(summary.tax)}</dd>
-                </div>
                 <div className="summary-total">
                   <dt>Total</dt>
                   <dd>{formatPrice(summary.total)}</dd>

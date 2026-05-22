@@ -78,7 +78,7 @@ const ContentPage = ({ pageKey }) => {
           <article key={point} className="info-card">
             <span>{String(index + 1).padStart(2, '0')}</span>
             <h2>{point}</h2>
-            <p>{page.detail || 'Designed to keep your boutique shopping experience clear, calm, and dependable.'}</p>
+            <p>{page.detail}</p>
           </article>
         ))}
       </section>
@@ -89,8 +89,8 @@ const ContentPage = ({ pageKey }) => {
           <h2>We are here to keep shopping simple.</h2>
         </div>
         <div className="home-auth-actions">
-          <Link to="/help" className="button secondary">Help</Link>
-          <Link to="/customer-care" className="button primary">Customer Care</Link>
+          <Link to="/contact" className="button secondary">Contact</Link>
+          <Link to="/contact" className="button primary">Customer Care</Link>
         </div>
       </section>
     </main>

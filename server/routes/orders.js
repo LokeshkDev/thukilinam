@@ -1,7 +1,8 @@
 const router = require('express').Router();
 const pool = require('../database/connection');
 const auth = require('../middleware/auth');
-const { sendOrderConfirmationEmail } = require('../utils/emailUtils');
+const { sendOrderConfirmationEmail, sendNewOrderNotificationEmail } = require('../utils/emailUtils');
+const { getShippingSettings, calculateShipping } = require('../utils/shippingUtils');
 const https = require('https');
 
 // Helper: generate order number
@@ -138,8 +139,8 @@ router.post('/', auth, async (req, res, next) => {
       const price = parseFloat(i.variant_sale_price || i.variant_price || i.discount_price || i.price || 0);
       return sum + price * i.quantity;
     }, 0);
-    const shipping = subtotal >= 2999 ? 0 : 149;
-    const tax = parseFloat((subtotal * 0.05).toFixed(2));
+    const shippingSettings = await getShippingSettings(pool);
+    let shipping = calculateShipping(subtotal, shippingSettings);
     let discount = 0;
 
     if (coupon_code) {
@@ -149,13 +150,19 @@ router.post('/', auth, async (req, res, next) => {
       );
       if (coupons.length) {
         const c = coupons[0];
-        discount = c.type === 'percentage' ? (subtotal * c.value) / 100 : c.value;
+        if (c.type === 'percentage') {
+          discount = (subtotal * c.value) / 100;
+        } else if (c.type === 'fixed') {
+          discount = c.value;
+        } else if (c.type === 'free_shipping') {
+          shipping = 0;
+        }
         if (c.max_discount && discount > c.max_discount) discount = c.max_discount;
         await pool.query('UPDATE coupons SET used_count=used_count+1 WHERE id=?', [c.id]);
       }
     }
 
-    const total = subtotal + shipping + tax - discount;
+    const total = Math.max(0, subtotal + shipping - discount);
     const orderNumber = genOrderNumber();
 
     // Fetch user details for Cashfree
@@ -184,7 +191,7 @@ router.post('/', auth, async (req, res, next) => {
       INSERT INTO orders (order_number, user_id, status, subtotal, shipping_charge, tax, discount, total, coupon_code, payment_method, payment_status, shipping_address, billing_address, notes)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
-      orderNumber, req.user.id, 'pending', subtotal, shipping, tax, discount, total,
+      orderNumber, req.user.id, 'pending', subtotal, shipping, 0, discount, total,
       coupon_code || null, 'cashfree', 'pending',
       JSON.stringify(shipping_address), JSON.stringify(billing_address || shipping_address), notes || null
     ]);
@@ -249,13 +256,22 @@ router.post('/verify', auth, async (req, res, next) => {
       // Send confirmation email (non-blocking)
       try {
         const [userRows] = await pool.query('SELECT email, name FROM users WHERE id=?', [req.user.id]);
+        const [items] = await pool.query('SELECT * FROM order_items WHERE order_id=?', [order.id]);
         if (userRows.length) {
-          await sendOrderConfirmationEmail(userRows[0].email, userRows[0].name, {
+          const emailOrder = {
             order_number: order_id,
             total: order.total,
             payment_method: 'cashfree',
-            status: 'processing'
+            status: 'processing',
+            shipping_address: order.shipping_address,
+            customer_name: userRows[0].name,
+            customer_email: userRows[0].email,
+            items
+          };
+          await sendOrderConfirmationEmail(userRows[0].email, userRows[0].name, {
+            ...emailOrder
           });
+          await sendNewOrderNotificationEmail(emailOrder);
         }
       } catch (e) {
         console.error('Email sending failed:', e.message);
@@ -270,6 +286,49 @@ router.post('/verify', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/orders/track — public order tracking lookup
+router.get('/track', async (req, res, next) => {
+  try {
+    const { order_number, email } = req.query;
+    if (!order_number) {
+      return res.status(400).json({ success: false, message: 'Order number is required.' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT o.id, o.order_number, o.status, o.payment_status, o.payment_method, o.total,
+              o.tracking_number, o.courier, o.created_at, o.updated_at, u.email AS customer_email
+       FROM orders o
+       JOIN users u ON o.user_id = u.id
+       WHERE o.order_number = ?`,
+      [String(order_number).trim()]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    const order = rows[0];
+    if (email && order.customer_email.toLowerCase() !== String(email).trim().toLowerCase()) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    res.json({
+      success: true,
+      order: {
+        order_number: order.order_number,
+        status: order.status,
+        payment_status: order.payment_status,
+        payment_method: order.payment_method,
+        total: order.total,
+        tracking_number: order.tracking_number,
+        courier: order.courier,
+        created_at: order.created_at,
+        updated_at: order.updated_at
+      }
+    });
+  } catch (err) { next(err); }
+});
+
 // GET /api/orders — user's orders
 router.get('/', auth, async (req, res, next) => {
   try {
@@ -279,6 +338,18 @@ router.get('/', auth, async (req, res, next) => {
       'SELECT * FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?',
       [req.user.id, parseInt(limit), offset]
     );
+    
+    if (orders.length > 0) {
+      const orderIds = orders.map(o => o.id);
+      const [items] = await pool.query(
+        'SELECT oi.*, p.slug FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id IN (?)',
+        [orderIds]
+      );
+      orders.forEach(order => {
+        order.items = items.filter(item => item.order_id === order.id);
+      });
+    }
+
     const [countRows] = await pool.query('SELECT COUNT(*) AS total FROM orders WHERE user_id=?', [req.user.id]);
     res.json({ success: true, orders, total: countRows[0].total });
   } catch (err) { next(err); }
@@ -289,7 +360,10 @@ router.get('/:id', auth, async (req, res, next) => {
   try {
     const [rows] = await pool.query('SELECT * FROM orders WHERE id=? AND user_id=?', [req.params.id, req.user.id]);
     if (!rows.length) return res.status(404).json({ success: false, message: 'Order not found.' });
-    const [items] = await pool.query('SELECT * FROM order_items WHERE order_id=?', [req.params.id]);
+    const [items] = await pool.query(
+      'SELECT oi.*, p.slug FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id=?',
+      [req.params.id]
+    );
     res.json({ success: true, order: { ...rows[0], items } });
   } catch (err) { next(err); }
 });

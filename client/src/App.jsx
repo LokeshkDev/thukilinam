@@ -27,6 +27,8 @@ import Profile from './pages/dashboard/Profile';
 import Orders from './pages/dashboard/Orders';
 import Wishlist from './pages/dashboard/Wishlist';
 import ContentPage from './pages/ContentPage';
+import Contact from './pages/Contact';
+import TrackOrder from './pages/TrackOrder';
 import CategoryLanding from './pages/CategoryLanding';
 
 // Scroll to top on route change
@@ -87,6 +89,8 @@ const AppShell = () => {
           <Route path="/shipping" element={<ContentPage pageKey="shipping-details" />} />
           <Route path="/stores" element={<ContentPage pageKey="stores" />} />
           <Route path="/help" element={<ContentPage pageKey="help" />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/track" element={<TrackOrder />} />
           <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
           <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
           <Route path="/payment-callback" element={<ProtectedRoute><PaymentCallback /></ProtectedRoute>} />

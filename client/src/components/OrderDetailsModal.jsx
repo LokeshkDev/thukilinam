@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api/axios';
-import { X, Package, Truck, CreditCard, Calendar } from 'lucide-react';
+import { X, Package, Truck, CreditCard } from 'lucide-react';
+import { COURIER_LINKS } from '../constants/couriers';
 
 const formatPrice = (value = 0) => `Rs. ${Number(value).toLocaleString('en-IN')}`;
 
@@ -111,6 +113,32 @@ const OrderDetailsModal = ({ orderId, onClose }) => {
               </div>
             </div>
 
+            {(order.tracking_number || order.status === 'shipped' || order.status === 'delivered') && (
+              <div className="track-inline-panel" style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>Shipment tracking</h3>
+                {order.tracking_number ? (
+                  <p style={{ margin: '0 0 12px', color: 'var(--muted)', fontSize: '14px' }}>
+                    AWB: <strong style={{ color: 'var(--ink)' }}>{order.tracking_number}</strong>
+                  </p>
+                ) : (
+                  <p style={{ margin: '0 0 12px', color: 'var(--muted)', fontSize: '14px' }}>
+                    Tracking number will be shared once dispatched.
+                  </p>
+                )}
+                <div className="track-courier-links">
+                  <a href={COURIER_LINKS.st_courier.url} target="_blank" rel="noopener noreferrer" className={`track-courier-btn${order.courier === 'st_courier' ? ' is-primary' : ''}`}>
+                    <span className="track-courier-name">ST Courier</span>
+                  </a>
+                  <a href={COURIER_LINKS.professional_courier.url} target="_blank" rel="noopener noreferrer" className={`track-courier-btn${order.courier === 'professional_courier' ? ' is-primary' : ''}`}>
+                    <span className="track-courier-name">Professional Courier</span>
+                  </a>
+                </div>
+                <Link to={`/track`} className="button secondary" style={{ marginTop: '12px', display: 'inline-flex' }} onClick={onClose}>
+                  Open track order page
+                </Link>
+              </div>
+            )}
+
             <h3 style={{ fontSize: '16px', marginBottom: '12px' }}>Items</h3>
             <div style={{ border: '1px solid var(--line)', borderRadius: '8px', padding: '0 16px', marginBottom: '24px' }}>
               {order.items && order.items.map((item, idx) => (
@@ -142,6 +170,24 @@ const OrderDetailsModal = ({ orderId, onClose }) => {
                       )}
                       Qty: {item.quantity}
                     </div>
+                    {order.status === 'delivered' && item.slug && (
+                      <Link 
+                        to={`/product/${item.slug}#product-reviews`}
+                        onClick={onClose}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          color: 'var(--primary, #6366f1)',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          textDecoration: 'none',
+                          marginTop: '6px'
+                        }}
+                      >
+                        Write a review →
+                      </Link>
+                    )}
                   </div>
                   <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
                     {formatPrice(item.price * item.quantity)}
@@ -187,10 +233,6 @@ const OrderDetailsModal = ({ orderId, onClose }) => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
                     <dt style={{ color: 'var(--muted)' }}>Shipping</dt>
                     <dd>{order.shipping_charge === 0 ? 'Free' : formatPrice(order.shipping_charge)}</dd>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
-                    <dt style={{ color: 'var(--muted)' }}>Tax</dt>
-                    <dd>{formatPrice(order.tax)}</dd>
                   </div>
                   <hr style={{ border: 'none', borderTop: '1px solid var(--line)', margin: '12px 0' }} />
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '16px' }}>

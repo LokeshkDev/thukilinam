@@ -22,14 +22,29 @@ const pool = mysql.createPool({
     const conn = await pool.getConnection();
     console.log('✅ MySQL connected successfully to:', process.env.DB_NAME, 'at', process.env.DB_HOST);
     
-    // Dynamically alter orders.payment_method to accept cashfree
+    const ensureColumn = async (table, column, definition) => {
+      const [columns] = await conn.query(
+        `SELECT COLUMN_NAME
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+        [table, column]
+      );
+
+      if (!columns.length) {
+        await conn.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      }
+    };
+
+    // Keep older local databases in step with the current order flow.
     try {
-      await conn.query(`
-        ALTER TABLE orders MODIFY COLUMN payment_method VARCHAR(50) DEFAULT 'cashfree'
-      `);
-      console.log('✅ Database schema verified: payment_method column modified to VARCHAR(50).');
+      await conn.query('ALTER TABLE orders MODIFY COLUMN payment_method VARCHAR(50) DEFAULT "cashfree"');
+      await ensureColumn('orders', 'tracking_number', 'VARCHAR(100)');
+      await ensureColumn('orders', 'courier', 'VARCHAR(50)');
+      await ensureColumn('orders', 'notes', 'TEXT');
+      await ensureColumn('order_items', 'attributes', 'JSON');
+      console.log('✅ Database schema verified: order columns are up to date.');
     } catch (dbErr) {
-      console.error('⚠️ Warning: Failed to alter payment_method column:', dbErr.message);
+      console.error('⚠️ Warning: Failed to verify order schema:', dbErr.message);
     }
     
     conn.release();

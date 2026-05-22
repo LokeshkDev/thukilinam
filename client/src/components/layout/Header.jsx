@@ -211,12 +211,6 @@ const Header = () => {
                 key={idx} 
                 to={link.url}
                 className={isActive ? 'active-tab' : ''}
-                style={isActive ? { 
-                  background: 'linear-gradient(135deg, var(--purple-700), var(--blue-700))',
-                  color: 'white',
-                  borderRadius: '4px',
-                  padding: '6px 12px'
-                } : {}}
               >
                 {link.label}
               </Link>

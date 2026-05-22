@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Box, Users, Ticket, Image, Settings, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Box, Users, Ticket, Image, Settings, LogOut, X, MessageSquare } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -14,6 +14,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     { name: 'Customers', path: '/customers', icon: <Users size={20} /> },
     { name: 'Coupons', path: '/coupons', icon: <Ticket size={20} /> },
     { name: 'Banners', path: '/banners', icon: <Image size={20} /> },
+    { name: 'Reviews & Feedback', path: '/reviews', icon: <MessageSquare size={20} /> },
     { name: 'Homepage CMS', path: '/cms', icon: <Settings size={20} /> },
   ];
 
@@ -49,7 +50,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               style={{ width: '42px', height: '42px', borderRadius: '10px', objectFit: 'cover', border: '2px solid rgba(255, 255, 255, 0.1)' }} 
             />
             <div className="text-start">
-              <h5 className="mb-0 fw-bold text-white text-gradient" style={{ letterSpacing: '0.5px' }}>Thukilinam</h5>
+              <h5 className="mb-0 text-white text-gradient" style={{ fontFamily: "'Great Vibes', 'Italianno', 'Playball', 'Alex Brush', cursive", fontSize: '26px', fontWeight: 'normal', letterSpacing: '0', textTransform: 'none' }}>Thukilinam</h5>
               <small className="text-muted" style={{ fontSize: '10px' }}>Admin Console</small>
             </div>
           </div>

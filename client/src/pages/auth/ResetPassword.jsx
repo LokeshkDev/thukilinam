@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, LockKeyhole } from 'lucide-react';
 import api from '../../api/axios';
-import { ArrowLeft } from 'lucide-react';
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -15,141 +15,105 @@ const ResetPassword = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (password !== confirmPassword) {
-      return setError('Passwords do not match');
-    }
-    
-    setLoading(true);
     setError('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
     setMessage('');
+
     try {
       const res = await api.post('/auth/reset-password', { token, password });
       if (res.data.success) {
-        setMessage('Password reset successful! Redirecting to login...');
-        setTimeout(() => {
-          navigate('/login');
-        }, 3000);
+        setMessage('Password reset successfully. Redirecting to login...');
+        setTimeout(() => navigate('/login'), 2200);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Something went wrong. Please try again.');
+      setError(err.response?.data?.message || 'Unable to reset your password. Please request a new link.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!token) {
-    return (
-      <div className="auth-page py-5 mt-5 d-flex align-items-center min-vh-100">
-        <div className="container">
-          <div className="row justify-content-center">
-            <div className="col-lg-5 col-md-7 text-center">
-              <div className="auth-card glass p-5 rounded-4">
-                <div className="mb-3 text-start">
-                  <Link 
-                    to="/" 
-                    className="back-to-home-link"
-                    style={{ 
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      color: 'var(--muted)',
-                      fontSize: '13px',
-                      fontWeight: '700',
-                      textDecoration: 'none',
-                      transition: 'color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--purple-700)'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--muted)'}
-                  >
-                    <ArrowLeft size={16} />
-                    <span>Back to Home</span>
-                  </Link>
-                </div>
-                <i className="fa-solid fa-circle-exclamation text-danger mb-3 fs-1"></i>
-                <h3 className="fw-bold mb-3">Invalid Link</h3>
-                <p className="text-muted mb-4">This password reset link is invalid or has expired.</p>
-                <Link to="/forgot-password" name="forgot-password" id="forgot-password" className="btn btn-primary-custom w-100 py-3 fw-bold">Request New Link</Link>
-              </div>
-            </div>
+  return (
+    <main className="auth-screen">
+      <section className="auth-shell">
+        <div className="auth-copy">
+          <p className="eyebrow">Secure reset</p>
+          <h1>Create a new password</h1>
+          <p>Choose a strong password for your Thukilinam account. Reset links expire after 1 hour.</p>
+          <div className="auth-benefits">
+            <span>Private account</span>
+            <span>Order access</span>
+            <span>Wishlist sync</span>
           </div>
         </div>
-      </div>
-    );
-  }
 
-  return (
-    <div className="auth-page py-5 mt-5 d-flex align-items-center min-vh-100">
-      <div className="container">
-        <div className="row justify-content-center">
-          <div className="col-lg-5 col-md-7">
-            <div className="auth-card glass p-4 p-md-5 rounded-4" data-aos="zoom-in">
-              <div className="mb-3">
-                <Link 
-                  to="/" 
-                  className="back-to-home-link"
-                  style={{ 
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    color: 'var(--muted)',
-                    fontSize: '13px',
-                    fontWeight: '700',
-                    textDecoration: 'none',
-                    transition: 'color 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = 'var(--purple-700)'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = 'var(--muted)'}
-                >
-                  <ArrowLeft size={16} />
-                  <span>Back to Home</span>
-                </Link>
-              </div>
-              <div className="text-center mb-5">
-                <h2 className="fw-bold mb-2">Reset <span className="text-gradient">Password</span></h2>
-                <p className="text-muted">Enter your new password below.</p>
-              </div>
+        <div className="auth-card">
+          <div className="mb-3">
+            <Link to="/login" className="back-to-home-link">
+              <ArrowLeft size={16} />
+              <span>Back to Login</span>
+            </Link>
+          </div>
 
-              {message && <div className="alert alert-success py-2 mb-4">{message}</div>}
-              {error && <div className="alert alert-danger py-2 mb-4">{error}</div>}
+          <div className="auth-card-head">
+            <span className="app-empty-icon small">
+              <LockKeyhole size={22} />
+            </span>
+            <div>
+              <h2>Reset Password</h2>
+              <p>{token ? 'Enter your new password below.' : 'This reset link is missing or invalid.'}</p>
+            </div>
+          </div>
+
+          {!token ? (
+            <>
+              <p className="form-alert">This password reset link is invalid or has expired.</p>
+              <Link to="/forgot-password" className="button primary auth-submit">Request New Link</Link>
+            </>
+          ) : (
+            <>
+              {message && <p className="form-alert success">{message}</p>}
+              {error && <p className="form-alert">{error}</p>}
 
               <form onSubmit={handleSubmit}>
-                <div className="mb-4">
-                  <label className="form-label small fw-bold">New Password</label>
-                  <div className="input-group-custom">
-                    <i className="fa-solid fa-lock icon"></i>
-                    <input 
-                      type="password" 
-                      className="form-control glass-input" 
-                      required 
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <label className="form-label small fw-bold">Confirm New Password</label>
-                  <div className="input-group-custom">
-                    <i className="fa-solid fa-lock icon"></i>
-                    <input 
-                      type="password" 
-                      className="form-control glass-input" 
-                      required 
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-                <button type="submit" className="btn btn-primary-custom w-100 py-3 fw-bold mb-4" disabled={loading}>
+                <label className="field">
+                  <span>New Password</span>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter new password"
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Confirm New Password</span>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                  />
+                </label>
+
+                <button type="submit" className="button primary auth-submit" disabled={loading}>
                   {loading ? 'Resetting...' : 'Reset Password'}
                 </button>
               </form>
-            </div>
-          </div>
+            </>
+          )}
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 };
 

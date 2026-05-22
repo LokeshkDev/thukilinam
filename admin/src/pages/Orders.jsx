@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api/axios';
-import { Eye, CheckCircle, Truck, XCircle, Search, Filter } from 'lucide-react';
+import { CheckCircle, Search, Filter, Edit2, Trash2 } from 'lucide-react';
 import OrderDetailsModal from '../components/OrderDetailsModal';
 
 const Orders = () => {
@@ -9,6 +9,9 @@ const Orders = () => {
   const [status, setStatus] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [shippingPrompt, setShippingPrompt] = useState(null);
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [selectedCourier, setSelectedCourier] = useState('');
 
   useEffect(() => {
     fetchOrders();
@@ -28,9 +31,22 @@ const Orders = () => {
     }
   };
 
-  const updateStatus = async (id, newStatus) => {
+  const handleDelete = async (id, orderNumber) => {
+    if (!window.confirm(`Delete order ${orderNumber}? This cannot be undone.`)) return;
     try {
-      const res = await api.put(`/orders/${id}/status`, { status: newStatus });
+      const res = await api.delete(`/orders/${id}`);
+      if (res.data.success) {
+        alert(res.data.message);
+        fetchOrders();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete order.');
+    }
+  };
+
+  const updateStatus = async (id, newStatus, extra = {}) => {
+    try {
+      const res = await api.put(`/orders/${id}/status`, { status: newStatus, ...extra });
       if (res.data.success) {
         alert(res.data.message);
         fetchOrders();
@@ -38,6 +54,29 @@ const Orders = () => {
     } catch (err) {
       alert('Failed to update order status.');
     }
+  };
+
+  const handleStatusClick = (order, newStatus) => {
+    if (newStatus === 'shipped') {
+      setShippingPrompt(order);
+      setTrackingNumber(order.tracking_number || '');
+      setSelectedCourier(order.courier || '');
+      return;
+    }
+
+    updateStatus(order.id, newStatus);
+  };
+
+  const submitShippingStatus = async (e) => {
+    e.preventDefault();
+    if (!shippingPrompt) return;
+    await updateStatus(shippingPrompt.id, 'shipped', {
+      tracking_number: trackingNumber.trim(),
+      courier: selectedCourier
+    });
+    setShippingPrompt(null);
+    setTrackingNumber('');
+    setSelectedCourier('');
   };
 
   const getStatusBadge = (s) => {
@@ -129,17 +168,18 @@ const Orders = () => {
                   <td><span className={getStatusBadge(order.status)}>{order.status.toUpperCase()}</span></td>
                   <td className="text-end pe-4">
                     <div className="d-flex justify-content-end gap-2">
-                      <button className="btn btn-sm btn-icon border" title="View Details" onClick={() => setSelectedOrderId(order.id)}><Eye size={16} /></button>
+                      <button className="btn btn-sm btn-icon border" title="View / Edit" onClick={() => setSelectedOrderId(order.id)}><Edit2 size={16} /></button>
+                      <button className="btn btn-sm btn-icon border text-danger" title="Delete" onClick={() => handleDelete(order.id, order.order_number)}><Trash2 size={16} /></button>
                       <div className="dropdown">
                         <button className="btn btn-sm btn-icon border dropdown-toggle no-caret" data-bs-toggle="dropdown">
                           <CheckCircle size={16} />
                         </button>
                         <ul className="dropdown-menu dropdown-menu-end shadow border-0 p-2">
-                          <li><button className="dropdown-item rounded-2" onClick={() => updateStatus(order.id, 'processing')}>Mark Processing</button></li>
-                          <li><button className="dropdown-item rounded-2" onClick={() => updateStatus(order.id, 'shipped')}>Mark Shipped</button></li>
-                          <li><button className="dropdown-item rounded-2 text-success" onClick={() => updateStatus(order.id, 'delivered')}>Mark Delivered</button></li>
+                          <li><button className="dropdown-item rounded-2" onClick={() => handleStatusClick(order, 'processing')}>Mark Processing</button></li>
+                          <li><button className="dropdown-item rounded-2" onClick={() => handleStatusClick(order, 'shipped')}>Mark Shipped</button></li>
+                          <li><button className="dropdown-item rounded-2 text-success" onClick={() => handleStatusClick(order, 'delivered')}>Mark Delivered</button></li>
                           <li><hr className="dropdown-divider" /></li>
-                          <li><button className="dropdown-item rounded-2 text-danger" onClick={() => updateStatus(order.id, 'cancelled')}>Cancel Order</button></li>
+                          <li><button className="dropdown-item rounded-2 text-danger" onClick={() => handleStatusClick(order, 'cancelled')}>Cancel Order</button></li>
                         </ul>
                       </div>
                     </div>
@@ -152,11 +192,51 @@ const Orders = () => {
       </div>
 
       {selectedOrderId && (
-        <OrderDetailsModal 
-          orderId={selectedOrderId} 
-          onClose={() => setSelectedOrderId(null)} 
+        <OrderDetailsModal
+          orderId={selectedOrderId}
+          onClose={() => setSelectedOrderId(null)}
           onStatusUpdate={fetchOrders}
+          onDelete={fetchOrders}
         />
+      )}
+
+      {shippingPrompt && (
+        <div className="modal d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(15, 23, 42, 0.45)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <form className="modal-content border-0 shadow-lg" onSubmit={submitShippingStatus}>
+              <div className="modal-header">
+                <h5 className="modal-title fw-bold">Mark Order Shipped</h5>
+                <button type="button" className="btn-close" onClick={() => setShippingPrompt(null)} aria-label="Close"></button>
+              </div>
+              <div className="modal-body">
+                <p className="text-muted small mb-3">Order #{shippingPrompt.order_number}</p>
+                <label className="form-label small fw-bold">Tracking number</label>
+                <input
+                  className="form-control"
+                  value={trackingNumber}
+                  onChange={(e) => setTrackingNumber(e.target.value)}
+                  placeholder="Enter courier tracking / AWB number"
+                  autoFocus
+                />
+                <label className="form-label small fw-bold mt-3">Courier service</label>
+                <select
+                  className="form-select"
+                  value={selectedCourier}
+                  onChange={(e) => setSelectedCourier(e.target.value)}
+                >
+                  <option value="">Select courier</option>
+                  <option value="st_courier">ST Courier</option>
+                  <option value="professional_courier">Professional Courier</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" onClick={() => setShippingPrompt(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save &amp; Notify</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS admin_users (
   email VARCHAR(150) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('superadmin','admin','manager') DEFAULT 'admin',
+  reset_token VARCHAR(255),
+  reset_token_expiry DATETIME,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -215,6 +217,8 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_id VARCHAR(255),
   shipping_address JSON,
   billing_address JSON,
+  tracking_number VARCHAR(100),
+  courier VARCHAR(50),
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -245,13 +249,16 @@ CREATE TABLE IF NOT EXISTS reviews (
   id INT AUTO_INCREMENT PRIMARY KEY,
   product_id INT NOT NULL,
   user_id INT NOT NULL,
+  order_id INT,
   rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
   title VARCHAR(200),
   comment TEXT,
   is_approved TINYINT(1) DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
+  UNIQUE KEY unique_user_product_review (user_id, product_id)
 );
 
 -- ============================================================
@@ -262,6 +269,7 @@ CREATE TABLE IF NOT EXISTS banners (
   title VARCHAR(255),
   subtitle VARCHAR(500),
   image_url VARCHAR(500) NOT NULL,
+  mobile_image_url VARCHAR(500),
   link VARCHAR(500),
   is_active TINYINT(1) DEFAULT 1,
   sort_order INT DEFAULT 0,

@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const pool = require('../database/connection');
 const auth = require('../middleware/auth');
+const { getShippingSettings, calculateShipping } = require('../utils/shippingUtils');
 
 // Helper: get or create cart for user
 async function getOrCreateCart(userId) {
@@ -31,11 +32,16 @@ router.get('/', auth, async (req, res, next) => {
       const price = i.variant_sale_price || i.variant_price || i.discount_price || i.price;
       return sum + price * i.quantity;
     }, 0);
-    const shipping = subtotal >= 2999 ? 0 : 149;
-    const tax = parseFloat((subtotal * 0.05).toFixed(2));
-    const total = subtotal + shipping + tax;
+    const shippingSettings = await getShippingSettings(pool);
+    const shipping = calculateShipping(subtotal, shippingSettings);
+    const total = subtotal + shipping;
 
-    res.json({ success: true, items, summary: { subtotal, shipping, tax, total, itemCount: items.length } });
+    res.json({
+      success: true,
+      items,
+      summary: { subtotal, shipping, total, itemCount: items.length },
+      shipping_settings: shippingSettings
+    });
   } catch (err) { next(err); }
 });
 

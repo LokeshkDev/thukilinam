@@ -7,12 +7,14 @@ const Banners = () => {
   const [loading, setLoading] = useState(true);
   const [editingBanner, setEditingBanner] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploadingDesktop, setUploadingDesktop] = useState(false);
+  const [uploadingMobile, setUploadingMobile] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
     subtitle: '',
     image_url: '',
+    mobile_image_url: '',
     link: '',
     sort_order: 0,
     is_active: 1
@@ -24,7 +26,7 @@ const Banners = () => {
 
   const fetchBanners = async () => {
     try {
-      const { data } = await api.get('/admin/manage/banners');
+      const { data } = await api.get('/banners');
       if (data.success) {
         setBanners(data.banners);
       }
@@ -42,6 +44,7 @@ const Banners = () => {
         title: banner.title || '',
         subtitle: banner.subtitle || '',
         image_url: banner.image_url || '',
+        mobile_image_url: banner.mobile_image_url || '',
         link: banner.link || '',
         sort_order: banner.sort_order || 0,
         is_active: banner.is_active
@@ -52,6 +55,7 @@ const Banners = () => {
         title: '',
         subtitle: '',
         image_url: '',
+        mobile_image_url: '',
         link: '',
         sort_order: 0,
         is_active: 1
@@ -67,11 +71,15 @@ const Banners = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.image_url) {
+      alert('Desktop Banner Image is required.');
+      return;
+    }
     try {
       if (editingBanner) {
-        await api.put(`/admin/manage/banners/${editingBanner.id}`, formData);
+        await api.put(`/banners/${editingBanner.id}`, formData);
       } else {
-        await api.post('/admin/manage/banners', formData);
+        await api.post('/banners', formData);
       }
       fetchBanners();
       handleCloseModal();
@@ -81,10 +89,13 @@ const Banners = () => {
     }
   };
 
-  const handleImageUpload = async (e) => {
+  const handleImageUpload = async (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
-    setUploading(true);
+    
+    if (type === 'desktop') setUploadingDesktop(true);
+    else setUploadingMobile(true);
+
     const data = new FormData();
     data.append('file', file);
     try {
@@ -92,19 +103,24 @@ const Banners = () => {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       if (res.data.success) {
-        setFormData(prev => ({ ...prev, image_url: res.data.url }));
+        if (type === 'desktop') {
+          setFormData(prev => ({ ...prev, image_url: res.data.url }));
+        } else {
+          setFormData(prev => ({ ...prev, mobile_image_url: res.data.url }));
+        }
       }
     } catch (err) {
       console.error('Error uploading banner image:', err);
       alert('Failed to upload image. Please try again.');
     } finally {
-      setUploading(false);
+      if (type === 'desktop') setUploadingDesktop(false);
+      else setUploadingMobile(false);
     }
   };
 
   const toggleStatus = async (id, currentStatus) => {
     try {
-      await api.put(`/admin/manage/banners/${id}`, { is_active: currentStatus ? 0 : 1 });
+      await api.put(`/banners/${id}`, { is_active: currentStatus ? 0 : 1 });
       fetchBanners();
     } catch (err) {
       alert('Failed to toggle status');
@@ -114,11 +130,16 @@ const Banners = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this banner?')) return;
     try {
-      await api.delete(`/admin/manage/banners/${id}`);
+      await api.delete(`/banners/${id}`);
       fetchBanners();
     } catch (err) {
       alert('Failed to delete banner');
     }
+  };
+
+  const formatImageUrl = (url) => {
+    if (!url) return '';
+    return url.startsWith('http') ? url : `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}${url}`;
   };
 
   if (loading) return <div className="p-4">Loading Banners...</div>;
@@ -128,10 +149,10 @@ const Banners = () => {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h2 className="mb-1">Homepage Banners</h2>
-          <p className="text-muted mb-0">Manage and activate banners displayed on the storefront homepage carousel.</p>
+          <p className="text-muted mb-0">Manage responsive banners displayed on the storefront homepage carousel (Desktop vs. Mobile bleed).</p>
         </div>
         <button className="btn btn-primary d-flex align-items-center gap-2" onClick={() => handleOpenModal()}>
-          <Plus size={18} /> Add Banner
+          <Plus size={18} /> Add Responsive Banner
         </button>
       </div>
 
@@ -140,48 +161,69 @@ const Banners = () => {
           <table className="table table-hover align-middle mb-0">
             <thead className="table-light">
               <tr>
-                <th scope="col" className="ps-4">Preview</th>
+                <th scope="col" className="ps-4">Desktop View</th>
+                <th scope="col">Mobile View</th>
                 <th scope="col">Title & Subtitle</th>
                 <th scope="col">Link</th>
                 <th scope="col">Order</th>
-                <th scope="col">Status (Active)</th>
+                <th scope="col">Status</th>
                 <th scope="col" className="text-end pe-4">Actions</th>
               </tr>
             </thead>
             <tbody>
               {banners.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-5 text-muted">
+                  <td colSpan="7" className="text-center py-5 text-muted">
                     No banners found. Add a banner to display it on the homepage.
                   </td>
                 </tr>
               ) : (
-                banners.map((banner) => (
+                banners.map((banner) => {
+                  const title = banner.title?.trim() || '';
+                  const subtitle = banner.subtitle?.trim() || '';
+
+                  return (
                   <tr key={banner.id}>
                     <td className="ps-4">
-                      <div style={{ width: '120px', height: '60px', borderRadius: '4px', overflow: 'hidden', background: '#f8f9fa' }}>
+                      <div style={{ width: '120px', height: '60px', borderRadius: '4px', overflow: 'hidden', background: '#f8f9fa', border: '1px solid #eee' }}>
                         <img 
-                          src={banner.image_url.startsWith('http') ? banner.image_url : `${import.meta.env.VITE_API_URL?.replace('/api', '') || ''}${banner.image_url}`} 
-                          alt={banner.title} 
+                          src={formatImageUrl(banner.image_url)} 
+                          alt={title || 'Desktop preview'} 
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           onError={(e) => { e.target.style.display = 'none'; }}
                         />
                       </div>
                     </td>
                     <td>
-                      <div className="fw-bold">{banner.title || 'Untitled'}</div>
-                      <div className="text-muted small">{banner.subtitle}</div>
+                      {banner.mobile_image_url ? (
+                        <div style={{ width: '50px', height: '60px', borderRadius: '4px', overflow: 'hidden', background: '#f8f9fa', border: '1px solid #eee' }}>
+                          <img 
+                            src={formatImageUrl(banner.mobile_image_url)} 
+                            alt={title || 'Mobile preview'} 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-muted small">Same as desktop</span>
+                      )}
+                    </td>
+                    <td>
+                      {title && <div className="fw-bold">{title}</div>}
+                      {subtitle && <div className="text-muted small">{subtitle}</div>}
                     </td>
                     <td>
                       {banner.link ? (
-                        <a href={banner.link} target="_blank" rel="noreferrer" className="text-decoration-none">
-                          {banner.link}
-                        </a>
+                        <span className="text-truncate d-inline-block" style={{ maxWidth: '150px' }} title={banner.link}>
+                          <a href={banner.link} target="_blank" rel="noreferrer" className="text-decoration-none small">
+                            {banner.link}
+                          </a>
+                        </span>
                       ) : (
                         <span className="text-muted">-</span>
                       )}
                     </td>
-                    <td>{banner.sort_order}</td>
+                    <td><span className="badge bg-light text-dark border">{banner.sort_order}</span></td>
                     <td>
                       <div className="form-check form-switch">
                         <input 
@@ -205,7 +247,8 @@ const Banners = () => {
                       </button>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -220,21 +263,21 @@ const Banners = () => {
               <div className="modal-content border-0 shadow">
                 <div className="modal-header border-bottom-0 pb-0">
                   <h5 className="modal-title fw-bold">
-                    {editingBanner ? 'Edit Banner' : 'Add New Banner'}
+                    {editingBanner ? 'Edit Banner' : 'Add New Responsive Banner'}
                   </h5>
                   <button type="button" className="btn-close" onClick={handleCloseModal}></button>
                 </div>
-                <div className="modal-body">
+                <div className="modal-body animate__animated animate__fadeIn animate__fast">
                   <form onSubmit={handleSubmit}>
                     <div className="row g-3">
                       <div className="col-md-6">
-                        <label className="form-label fw-semibold">Title (Optional)</label>
+                        <label className="form-label fw-semibold">Title (Optional overlay/tag)</label>
                         <input 
                           type="text" 
                           className="form-control" 
                           value={formData.title} 
                           onChange={(e) => setFormData({...formData, title: e.target.value})} 
-                          placeholder="Summer Collection"
+                          placeholder="Festive Saree Launch"
                         />
                       </div>
                       <div className="col-md-6">
@@ -244,32 +287,71 @@ const Banners = () => {
                           className="form-control" 
                           value={formData.subtitle} 
                           onChange={(e) => setFormData({...formData, subtitle: e.target.value})} 
-                          placeholder="Discover the newest trends"
+                          placeholder="Up to 40% OFF"
                         />
                       </div>
-                      <div className="col-12">
-                        <label className="form-label fw-semibold">Banner Image (Required)</label>
+                      
+                      {/* Desktop Image upload */}
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-primary">Desktop Banner Image (Required)</label>
                         <input 
                           type="file" 
                           className="form-control mb-2" 
                           accept="image/*"
-                          onChange={handleImageUpload}
+                          onChange={(e) => handleImageUpload(e, 'desktop')}
                         />
-                        {uploading && <div className="spinner-border spinner-border-sm text-primary mb-2" role="status"><span className="visually-hidden">Uploading...</span></div>}
+                        {uploadingDesktop && (
+                          <div className="d-flex align-items-center gap-2 mb-2 text-primary">
+                            <span className="spinner-border spinner-border-sm" role="status"></span>
+                            <span className="small">Uploading desktop image...</span>
+                          </div>
+                        )}
                         <input 
                           type="text" 
                           className="form-control" 
                           value={formData.image_url} 
                           onChange={(e) => setFormData({...formData, image_url: e.target.value})} 
                           required 
-                          placeholder="https://pub-...r2.dev/banner.jpg"
+                          placeholder="Image URL or upload a file"
                         />
                         {formData.image_url && (
-                          <div className="mt-2 text-center bg-light p-2 rounded-3">
-                            <img src={formData.image_url} alt="Banner Preview" style={{ maxHeight: '150px', maxWidth: '100%', objectFit: 'contain' }} className="rounded animate__animated animate__fadeIn" />
+                          <div className="mt-2 text-center bg-light p-2 rounded-3 border">
+                            <div className="text-muted small mb-1">Desktop Preview</div>
+                            <img src={formatImageUrl(formData.image_url)} alt="Desktop Preview" style={{ maxHeight: '110px', maxWidth: '100%', objectFit: 'contain' }} className="rounded" />
                           </div>
                         )}
                       </div>
+
+                      {/* Mobile Image upload */}
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-success">Mobile Banner Image (Optional)</label>
+                        <input 
+                          type="file" 
+                          className="form-control mb-2" 
+                          accept="image/*"
+                          onChange={(e) => handleImageUpload(e, 'mobile')}
+                        />
+                        {uploadingMobile && (
+                          <div className="d-flex align-items-center gap-2 mb-2 text-success">
+                            <span className="spinner-border spinner-border-sm" role="status"></span>
+                            <span className="small">Uploading mobile image...</span>
+                          </div>
+                        )}
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          value={formData.mobile_image_url} 
+                          onChange={(e) => setFormData({...formData, mobile_image_url: e.target.value})} 
+                          placeholder="Leaves empty to reuse desktop image"
+                        />
+                        {formData.mobile_image_url && (
+                          <div className="mt-2 text-center bg-light p-2 rounded-3 border">
+                            <div className="text-muted small mb-1">Mobile Preview (Potrait bleed)</div>
+                            <img src={formatImageUrl(formData.mobile_image_url)} alt="Mobile Preview" style={{ maxHeight: '110px', maxWidth: '100%', objectFit: 'contain' }} className="rounded" />
+                          </div>
+                        )}
+                      </div>
+
                       <div className="col-md-6">
                         <label className="form-label fw-semibold">Redirect Link (Optional)</label>
                         <input 
@@ -281,7 +363,7 @@ const Banners = () => {
                         />
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label fw-semibold">Sort Order</label>
+                        <label className="form-label fw-semibold">Sort Order (Lower numbers show first)</label>
                         <input 
                           type="number" 
                           className="form-control" 
@@ -307,7 +389,7 @@ const Banners = () => {
                     
                     <div className="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
                       <button type="button" className="btn btn-light" onClick={handleCloseModal}>Cancel</button>
-                      <button type="submit" className="btn btn-primary px-4">
+                      <button type="submit" className="btn btn-primary px-4" disabled={uploadingDesktop || uploadingMobile}>
                         {editingBanner ? 'Save Changes' : 'Create Banner'}
                       </button>
                     </div>

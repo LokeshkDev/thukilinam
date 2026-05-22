@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
-import { MapPin, Trash2, Home, Briefcase, Map } from 'lucide-react';
+import { MapPin, Trash2, Home, Briefcase, Map, LogOut } from 'lucide-react';
 
 const Profile = () => {
   const { user, logout } = useAuth();
@@ -78,16 +78,26 @@ const Profile = () => {
       <section className="dashboard-layout">
         <aside className="account-panel">
           <div className="account-avatar">{(user?.name || user?.email || 'T').charAt(0).toUpperCase()}</div>
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <p className="eyebrow">Signed In</p>
             <h2>{user?.name || 'Thukilinam Customer'}</h2>
             <p>{user?.email || 'Your boutique profile'}</p>
           </div>
+          {/* Mobile-only logout button inside the profile card header */}
+          <button
+            type="button"
+            onClick={logout}
+            className="mobile-card-logout"
+            aria-label="Log out"
+          >
+            <LogOut size={16} />
+            <span>Log Out</span>
+          </button>
           <nav className="account-nav" aria-label="Account navigation">
             <Link to="/profile" className="is-active">Profile Settings</Link>
             <Link to="/orders">Order History</Link>
             <Link to="/wishlist">My Wishlist</Link>
-            <button type="button" onClick={logout}>Log Out</button>
+            <button type="button" className="desktop-only-logout" onClick={logout}>Log Out</button>
           </nav>
         </aside>
 
