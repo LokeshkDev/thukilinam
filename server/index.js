@@ -7,11 +7,23 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const app = express();
+const normalizeOrigin = (origin) => origin && origin.replace(/\/$/, '');
+const allowedOrigins = [
+  ...(process.env.CLIENT_URL || 'http://localhost:5173').split(','),
+  ...(process.env.ADMIN_URL || 'http://localhost:5174').split(','),
+]
+  .map((origin) => normalizeOrigin(origin.trim()))
+  .filter(Boolean);
 
 // ─── Security & Middleware ───────────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
-  origin: [process.env.CLIENT_URL || 'http://localhost:5173', process.env.ADMIN_URL || 'http://localhost:5174'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS blocked origin: ${origin}`));
+  },
   credentials: true
 }));
 app.use(morgan('dev'));
