@@ -5,6 +5,7 @@ const { body } = require('express-validator');
 const pool = require('../database/connection');
 const { signUserToken } = require('../utils/jwtUtils');
 const { sendResetEmail, sendWelcomeEmail, sendNewUserNotificationEmail } = require('../utils/emailUtils');
+const { getClientUrl } = require('../utils/urlUtils');
 const validate = require('../middleware/validate');
 const auth = require('../middleware/auth');
 
@@ -85,7 +86,7 @@ router.post('/forgot-password', [
     const expiry = new Date(Date.now() + 3600000); // 1 hour
     await pool.query('UPDATE users SET reset_token=?, reset_token_expiry=? WHERE id=?', [tokenHash, expiry, rows[0].id]);
 
-    const resetLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${encodeURIComponent(token)}`;
+    const resetLink = `${getClientUrl()}/reset-password?token=${encodeURIComponent(token)}`;
     sendResetEmail(email, rows[0].name, resetLink, { accountLabel: 'Thukilinam customer account' })
       .catch(mailErr => console.error('Customer reset email failed:', mailErr.message));
     res.json({ success: true, message: 'If this email exists, a reset link has been sent.' });

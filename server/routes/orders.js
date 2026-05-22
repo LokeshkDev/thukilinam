@@ -3,6 +3,7 @@ const pool = require('../database/connection');
 const auth = require('../middleware/auth');
 const { sendOrderConfirmationEmail, sendNewOrderNotificationEmail } = require('../utils/emailUtils');
 const { getShippingSettings, calculateShipping } = require('../utils/shippingUtils');
+const { getClientUrl } = require('../utils/urlUtils');
 const https = require('https');
 
 // Helper: generate order number
@@ -27,7 +28,7 @@ function createCashfreeOrder(orderNumber, total, customer) {
         customer_name: customer.name || 'Customer'
       },
       order_meta: {
-        return_url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/payment-callback?order_id=${orderNumber}`
+        return_url: `${getClientUrl()}/payment-callback?order_id=${orderNumber}`
       }
     });
 

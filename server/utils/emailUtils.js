@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { getClientUrl, getAdminUrl } = require('./urlUtils');
 require('dotenv').config();
 
 const transporter = nodemailer.createTransport({
@@ -13,7 +14,8 @@ const transporter = nodemailer.createTransport({
 
 const brandName = 'Thukilinam';
 const fromAddress = process.env.FROM_EMAIL || process.env.SMTP_USER;
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const clientUrl = getClientUrl();
+const adminUrl = getAdminUrl();
 const ownerEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.OWNER_EMAIL || process.env.FROM_EMAIL || process.env.SMTP_USER;
 
 const escapeHtml = (value = '') => String(value)
@@ -199,7 +201,7 @@ const sendNewOrderNotificationEmail = async (order) => {
         ${orderDetailsBlock(order)}
       `,
       ctaLabel: 'Open Admin Orders',
-      ctaUrl: `${process.env.ADMIN_URL || 'http://localhost:5174'}/orders`
+      ctaUrl: `${adminUrl}/orders`
     })
   });
 };
@@ -261,7 +263,7 @@ const sendNewUserNotificationEmail = async (user) => {
         </table>
       `,
       ctaLabel: 'Open Customers',
-      ctaUrl: `${process.env.ADMIN_URL || 'http://localhost:5174'}/customers`
+      ctaUrl: `${adminUrl}/customers`
     })
   });
 };

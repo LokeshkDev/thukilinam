@@ -5,6 +5,7 @@ const { body } = require('express-validator');
 const pool = require('../../database/connection');
 const { signAdminToken } = require('../../utils/jwtUtils');
 const { sendResetEmail } = require('../../utils/emailUtils');
+const { getAdminUrl } = require('../../utils/urlUtils');
 const validate = require('../../middleware/validate');
 const adminAuth = require('../../middleware/adminAuth');
 
@@ -87,7 +88,7 @@ router.post('/forgot-password', [
     const expiry = new Date(Date.now() + 3600000);
     await pool.query('UPDATE admin_users SET reset_token=?, reset_token_expiry=? WHERE id=?', [tokenHash, expiry, rows[0].id]);
 
-    const resetLink = `${process.env.ADMIN_URL || 'http://localhost:5174'}/reset-password?token=${encodeURIComponent(token)}`;
+    const resetLink = `${getAdminUrl()}/reset-password?token=${encodeURIComponent(token)}`;
     sendResetEmail(rows[0].email, rows[0].name, resetLink, { accountLabel: 'Thukilinam admin account' })
       .catch(mailErr => console.error('Admin reset email failed:', mailErr.message));
 
