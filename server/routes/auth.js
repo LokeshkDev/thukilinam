@@ -86,7 +86,8 @@ router.post('/forgot-password', [
     await pool.query('UPDATE users SET reset_token=?, reset_token_expiry=? WHERE id=?', [tokenHash, expiry, rows[0].id]);
 
     const resetLink = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${encodeURIComponent(token)}`;
-    await sendResetEmail(email, rows[0].name, resetLink, { accountLabel: 'Thukilinam customer account' });
+    sendResetEmail(email, rows[0].name, resetLink, { accountLabel: 'Thukilinam customer account' })
+      .catch(mailErr => console.error('Customer reset email failed:', mailErr.message));
     res.json({ success: true, message: 'If this email exists, a reset link has been sent.' });
   } catch (err) { next(err); }
 });

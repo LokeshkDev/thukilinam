@@ -88,7 +88,8 @@ router.post('/forgot-password', [
     await pool.query('UPDATE admin_users SET reset_token=?, reset_token_expiry=? WHERE id=?', [tokenHash, expiry, rows[0].id]);
 
     const resetLink = `${process.env.ADMIN_URL || 'http://localhost:5174'}/reset-password?token=${encodeURIComponent(token)}`;
-    await sendResetEmail(rows[0].email, rows[0].name, resetLink, { accountLabel: 'Thukilinam admin account' });
+    sendResetEmail(rows[0].email, rows[0].name, resetLink, { accountLabel: 'Thukilinam admin account' })
+      .catch(mailErr => console.error('Admin reset email failed:', mailErr.message));
 
     res.json({ success: true, message: 'If this admin email exists, a reset link has been sent.' });
   } catch (err) { next(err); }

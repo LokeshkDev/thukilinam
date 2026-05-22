@@ -5,7 +5,10 @@ const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT, 10) || 587,
   secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT, 10) || 10000,
+  greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT, 10) || 10000,
+  socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT, 10) || 15000
 });
 
 const brandName = 'Thukilinam';
