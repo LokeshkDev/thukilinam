@@ -85,7 +85,7 @@ input {
   min-height: 100vh;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(247, 244, 252, 0.82)),
-    url("/assets/tamilnadu_boutique_saree_hero_1778563702008.png") center/cover no-repeat fixed;
+    url("https://pub-0c62c6ff2a14403fad71a59a71f1a8b6.r2.dev/banners/1779383313098-720712888.webp") center/cover no-repeat fixed;
   display: flex;
   flex-direction: column;
   justify-content: center;
