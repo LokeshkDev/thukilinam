@@ -112,7 +112,7 @@ const Checkout = () => {
           throw new Error('Payment gateway SDK failed to load. Please refresh the page and try again.');
         }
 
-        const cashfree = window.Cashfree({ mode: "sandbox" });
+        const cashfree = window.Cashfree({ mode: (import.meta.env.VITE_CASHFREE_MODE || "sandbox") });
         let checkoutOptions = {
           paymentSessionId: res.data.payment_session_id,
           returnUrl: `${window.location.origin}/payment-callback?order_id=${res.data.order.order_number}`
