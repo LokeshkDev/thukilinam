@@ -4,6 +4,13 @@ const auth = require('../middleware/auth');
 const { sendOrderConfirmationEmail, sendNewOrderNotificationEmail } = require('../utils/emailUtils');
 const { getShippingSettings, calculateShipping } = require('../utils/shippingUtils');
 const { getClientUrl } = require('../utils/urlUtils');
+const {
+  getCashfreeMode,
+  getCashfreeApiHost,
+  getCashfreeCredentials,
+  assertCashfreeConfigured,
+  extractPaymentSessionId
+} = require('../utils/cashfreeUtils');
 const https = require('https');
 
 // Helper: generate order number
@@ -14,9 +21,16 @@ function genOrderNumber() {
 // Cashfree Helper: Create Order Session
 function createCashfreeOrder(orderNumber, total, customer) {
   return new Promise((resolve, reject) => {
-    const isSandbox = process.env.CASHFREE_ENV !== 'production';
-    const host = isSandbox ? 'sandbox.cashfree.com' : 'api.cashfree.com';
-    
+    try {
+      assertCashfreeConfigured();
+    } catch (configErr) {
+      reject(configErr);
+      return;
+    }
+
+    const host = getCashfreeApiHost();
+    const { appId, secret } = getCashfreeCredentials();
+
     const postData = JSON.stringify({
       order_id: orderNumber,
       order_amount: parseFloat(total.toFixed(2)),
@@ -39,8 +53,8 @@ function createCashfreeOrder(orderNumber, total, customer) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-client-id': process.env.CASHFREE_APP_ID,
-        'x-client-secret': process.env.CASHFREE_SECRET_KEY,
+        'x-client-id': appId,
+        'x-client-secret': secret,
         'x-api-version': '2023-08-01',
         'Content-Length': Buffer.byteLength(postData)
       }
@@ -51,11 +65,17 @@ function createCashfreeOrder(orderNumber, total, customer) {
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
         try {
-          const parsed = JSON.parse(data);
+          const parsed = JSON.parse(data || '{}');
           if (res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(parsed);
+            const sessionId = extractPaymentSessionId(parsed);
+            if (!sessionId) {
+              reject(new Error('Cashfree order created but payment_session_id was missing in the response.'));
+              return;
+            }
+            resolve({ ...parsed, payment_session_id: sessionId });
           } else {
-            reject(new Error(parsed.message || `Cashfree returned status code ${res.statusCode}`));
+            const detail = parsed.message || parsed.code || JSON.stringify(parsed);
+            reject(new Error(`Cashfree API error (${res.statusCode}): ${detail}`));
           }
         } catch (e) {
           reject(new Error(`Failed to parse Cashfree response: ${e.message}`));
@@ -72,8 +92,8 @@ function createCashfreeOrder(orderNumber, total, customer) {
 // Cashfree Helper: Verify Payment
 function verifyCashfreePayment(orderNumber) {
   return new Promise((resolve, reject) => {
-    const isSandbox = process.env.CASHFREE_ENV !== 'production';
-    const host = isSandbox ? 'sandbox.cashfree.com' : 'api.cashfree.com';
+    const host = getCashfreeApiHost();
+    const { appId, secret } = getCashfreeCredentials();
 
     const options = {
       hostname: host,
@@ -81,8 +101,8 @@ function verifyCashfreePayment(orderNumber) {
       path: `/pg/orders/${orderNumber}`,
       method: 'GET',
       headers: {
-        'x-client-id': process.env.CASHFREE_APP_ID,
-        'x-client-secret': process.env.CASHFREE_SECRET_KEY,
+        'x-client-id': appId,
+        'x-client-secret': secret,
         'x-api-version': '2023-08-01'
       }
     };
@@ -182,6 +202,12 @@ router.post('/', auth, async (req, res, next) => {
     try {
       const cfOrder = await createCashfreeOrder(orderNumber, total, cfCustomer);
       paymentSessionId = cfOrder.payment_session_id;
+      if (!paymentSessionId) {
+        return res.status(500).json({
+          success: false,
+          message: 'Cashfree did not return a valid payment session. Check API keys and CASHFREE_ENV.'
+        });
+      }
     } catch (cfErr) {
       console.error('Failed to create Cashfree order:', cfErr.message);
       return res.status(500).json({ success: false, message: `Failed to initialize Cashfree payment: ${cfErr.message}` });
@@ -218,6 +244,7 @@ router.post('/', auth, async (req, res, next) => {
       success: true,
       message: 'Order initiated successfully!',
       payment_session_id: paymentSessionId,
+      cashfree_mode: getCashfreeMode(),
       order: { id: orderId, order_number: orderNumber, total, status: 'pending', payment_method: 'cashfree' }
     });
   } catch (err) { next(err); }

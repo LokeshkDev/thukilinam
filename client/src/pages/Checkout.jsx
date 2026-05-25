@@ -112,12 +112,19 @@ const Checkout = () => {
           throw new Error('Payment gateway SDK failed to load. Please refresh the page and try again.');
         }
 
-        const cashfree = window.Cashfree({ mode: (import.meta.env.VITE_CASHFREE_MODE || "sandbox") });
-        let checkoutOptions = {
-          paymentSessionId: res.data.payment_session_id,
+        const cashfreeMode = res.data.cashfree_mode || import.meta.env.VITE_CASHFREE_MODE || 'sandbox';
+        const sessionId = res.data.payment_session_id;
+
+        if (!sessionId || typeof sessionId !== 'string') {
+          throw new Error('Invalid payment session from server. Ensure server CASHFREE_ENV matches your API keys.');
+        }
+
+        const cashfree = window.Cashfree({ mode: cashfreeMode });
+        const checkoutOptions = {
+          paymentSessionId: sessionId,
           returnUrl: `${window.location.origin}/payment-callback?order_id=${res.data.order.order_number}`
         };
-        
+
         cashfree.checkout(checkoutOptions);
       } else {
         throw new Error('Failed to initialize payment session from backend.');

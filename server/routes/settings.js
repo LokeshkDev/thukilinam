@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const pool = require('../database/connection');
+const { getCashfreeMode } = require('../utils/cashfreeUtils');
 
 function parseSettingValue(value) {
   if (value && typeof value === 'object') return value;
@@ -9,6 +10,14 @@ function parseSettingValue(value) {
     return value;
   }
 }
+
+// GET /api/settings/payment — public Cashfree mode hint (sandbox vs production)
+router.get('/payment', async (req, res) => {
+  res.json({
+    success: true,
+    cashfree_mode: getCashfreeMode()
+  });
+});
 
 // GET /api/settings - Fetch all public CMS settings
 router.get('/', async (req, res, next) => {
