@@ -8,24 +8,61 @@ const path = require('path');
 
 const app = express();
 const normalizeOrigin = (origin) => origin && origin.replace(/\/$/, '');
-const allowedOrigins = [
-  ...(process.env.CLIENT_URL || 'http://localhost:5173').split(','),
-  ...(process.env.ADMIN_URL || 'http://localhost:5174').split(','),
-]
-  .map((origin) => normalizeOrigin(origin.trim()))
-  .filter(Boolean);
+
+const defaultDevOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:3000'
+];
+
+const envOrigins = [
+  ...(process.env.CLIENT_URL || '').split(','),
+  ...(process.env.ADMIN_URL || '').split(','),
+  ...(process.env.PUBLIC_CLIENT_URL || '').split(','),
+  ...(process.env.PUBLIC_ADMIN_URL || '').split(',')
+];
+
+const allowedOrigins = Array.from(
+  new Set(
+    [...defaultDevOrigins, ...envOrigins]
+      .map((origin) => normalizeOrigin(origin.trim()))
+      .filter(Boolean)
+  )
+);
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // allow non-browser requests (Postman, curl, server-to-server)
+  const normalized = normalizeOrigin(origin);
+  if (allowedOrigins.includes(normalized)) return true;
+  // Automatically allow apex and all subdomains of thukilinam.com
+  if (/^https?:\/\/([a-z0-9-]+\.)*thukilinam\.com$/i.test(normalized)) {
+    return true;
+  }
+  return false;
+};
 
 // ─── Security & Middleware ───────────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({
+
+const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(normalizeOrigin(origin))) {
+    if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
-    return callback(new Error(`CORS blocked origin: ${origin}`));
+    console.warn(`[CORS] Disallowed origin: ${origin}`);
+    return callback(null, false);
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

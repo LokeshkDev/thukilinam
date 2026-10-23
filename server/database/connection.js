@@ -52,6 +52,22 @@ const pool = mysql.createPool({
     console.error('❌ MySQL connection failed!');
     console.error('Error Code:', err.code);
     console.error('Error Message:', err.message);
+
+    if (err.code === 'ETIMEDOUT') {
+      console.error('\n🔍 Diagnosis for ETIMEDOUT:');
+      console.error(`- Could not reach ${process.env.DB_HOST}:${process.env.DB_PORT || 3306} within timeout.`);
+      console.error('- Check AWS EC2 Security Groups: inbound rule for MySQL port 3306 must allow your current public IP.');
+      console.error('- If your ISP has dynamic IP, update the EC2 Security Group "My IP" rule.');
+      console.error('- Or connect via SSH Tunnel: ssh -N -L 3306:localhost:3306 ubuntu@' + (process.env.DB_HOST || '52.66.173.135') + ' and set DB_HOST=127.0.0.1 in .env\n');
+    } else if (err.code === 'ECONNREFUSED') {
+      console.error('\n🔍 Diagnosis for ECONNREFUSED:');
+      console.error(`- Port ${process.env.DB_PORT || 3306} on ${process.env.DB_HOST} actively refused connection.`);
+      console.error('- Check if MySQL service is running on the host (e.g. sudo systemctl status mysql).\n');
+    } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+      console.error('\n🔍 Diagnosis for Access Denied:');
+      console.error(`- Check DB_USER (${process.env.DB_USER}) and DB_PASSWORD.\n`);
+    }
+
     process.exit(1);
   }
 })();
