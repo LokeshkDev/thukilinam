@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
-import { useAuth } from './context/AuthContext';
 
 // Layout
 import Header from './components/layout/Header';
@@ -19,12 +18,6 @@ import ProductDetail from './pages/ProductDetail';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
 import PaymentCallback from './pages/PaymentCallback';
-import Login from './pages/auth/Login';
-import Register from './pages/auth/Register';
-import ForgotPassword from './pages/auth/ForgotPassword';
-import ResetPassword from './pages/auth/ResetPassword';
-import Profile from './pages/dashboard/Profile';
-import Orders from './pages/dashboard/Orders';
 import Wishlist from './pages/dashboard/Wishlist';
 import ContentPage from './pages/ContentPage';
 import Contact from './pages/Contact';
@@ -40,38 +33,14 @@ const ScrollToTop = () => {
   return null;
 };
 
-const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-  const location = useLocation();
-
-  if (loading) {
-    return (
-      <main className="app-page">
-        <div className="app-empty-state">
-          <p>Checking your account...</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
-  }
-
-  return children;
-};
-
 const AppShell = () => {
-  const { pathname } = useLocation();
-  const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].includes(pathname);
-
   return (
     <>
       <ScrollToTop />
       <Loader />
-      <div className={`site-shell ${isAuthPage ? 'auth-only-shell' : ''}`}>
+      <div className="site-shell">
         <IconSprite />
-        {!isAuthPage && <Header />}
+        <Header />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/shop" element={<Shop />} />
@@ -91,22 +60,27 @@ const AppShell = () => {
           <Route path="/help" element={<ContentPage pageKey="help" />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/track" element={<TrackOrder />} />
-          <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
-          <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-          <Route path="/payment-callback" element={<ProtectedRoute><PaymentCallback /></ProtectedRoute>} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          
-          {/* Dashboard Routes */}
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
-          <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
+
+          {/* Cart & Checkout (Guest / Direct checkout - no login required) */}
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/payment-callback" element={<PaymentCallback />} />
+          <Route path="/wishlist" element={<Wishlist />} />
+
+          {/* Redirects for removed login/register routes */}
+          <Route path="/login" element={<Navigate to="/shop" replace />} />
+          <Route path="/register" element={<Navigate to="/shop" replace />} />
+          <Route path="/forgot-password" element={<Navigate to="/shop" replace />} />
+          <Route path="/reset-password" element={<Navigate to="/shop" replace />} />
+          <Route path="/profile" element={<Navigate to="/track" replace />} />
+          <Route path="/orders" element={<Navigate to="/track" replace />} />
+
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        {!isAuthPage && <Footer />}
-        {!isAuthPage && <BottomNav />}
-        {!isAuthPage && <SupportFAB />}
+        <Footer />
+        <BottomNav />
+        <SupportFAB />
       </div>
     </>
   );

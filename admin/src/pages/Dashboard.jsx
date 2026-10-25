@@ -27,6 +27,9 @@ const Dashboard = () => {
   if (loading || !data) return <div className="text-center py-5"><div className="spinner-border"></div></div>;
 
   const COLORS = ['#6A38B6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
+  const statusBreakdown = data.status_breakdown || data.order_status || [];
+  const monthlyData = data.monthly || [];
+  const recentOrders = data.recent_orders || [];
 
   return (
     <div className="admin-dashboard">
@@ -38,37 +41,37 @@ const Dashboard = () => {
               <span className="text-success small fw-bold">+12% <TrendingUp size={16} /></span>
             </div>
             <h6 className="text-muted mb-1">Total Revenue</h6>
-            <h3 className="fw-bold mb-0">₹{data.stats.total_revenue}</h3>
+            <h3 className="fw-bold mb-0">₹{Number(data.stats?.total_revenue || 0).toLocaleString()}</h3>
           </div>
         </div>
         <div className="col-md-3">
           <div className="stat-card bg-white p-4 rounded-4 shadow-sm border-0">
             <div className="d-flex justify-content-between mb-3">
-              <div className="icon-wrap bg-info-soft p-3 rounded-circle text-info"><ShoppingBag size={24} /></div>
+              <div className="icon-wrap bg-success-soft p-3 rounded-circle text-success"><ShoppingBag size={24} /></div>
               <span className="text-success small fw-bold">+5% <TrendingUp size={16} /></span>
             </div>
             <h6 className="text-muted mb-1">Total Orders</h6>
-            <h3 className="fw-bold mb-0">{data.stats.total_orders}</h3>
-          </div>
-        </div>
-        <div className="col-md-3">
-          <div className="stat-card bg-white p-4 rounded-4 shadow-sm border-0">
-            <div className="d-flex justify-content-between mb-3">
-              <div className="icon-wrap bg-warning-soft p-3 rounded-circle text-warning"><Clock size={24} /></div>
-              <span className="text-danger small fw-bold">Active</span>
-            </div>
-            <h6 className="text-muted mb-1">Pending Orders</h6>
-            <h3 className="fw-bold mb-0">{data.stats.pending_orders}</h3>
+            <h3 className="fw-bold mb-0">{data.stats?.total_orders || 0}</h3>
           </div>
         </div>
         <div className="col-md-3">
           <div className="stat-card bg-white p-4 rounded-4 shadow-sm border-0">
             <div className="d-flex justify-content-between mb-3">
               <div className="icon-wrap bg-success-soft p-3 rounded-circle text-success"><Users size={24} /></div>
-              <span className="text-success small fw-bold">+8% <TrendingUp size={16} /></span>
+              <span className="text-success small fw-bold">+18% <TrendingUp size={16} /></span>
             </div>
             <h6 className="text-muted mb-1">Total Customers</h6>
-            <h3 className="fw-bold mb-0">{data.stats.total_users}</h3>
+            <h3 className="fw-bold mb-0">{data.stats?.total_users || 0}</h3>
+          </div>
+        </div>
+        <div className="col-md-3">
+          <div className="stat-card bg-white p-4 rounded-4 shadow-sm border-0">
+            <div className="d-flex justify-content-between mb-3">
+              <div className="icon-wrap bg-warning-soft p-3 rounded-circle text-warning"><Clock size={24} /></div>
+              <span className="text-danger small fw-bold">-2%</span>
+            </div>
+            <h6 className="text-muted mb-1">Pending Orders</h6>
+            <h3 className="fw-bold mb-0">{data.stats?.pending_orders || 0}</h3>
           </div>
         </div>
       </div>
@@ -79,7 +82,7 @@ const Dashboard = () => {
             <h5 className="fw-bold mb-4">Revenue Overview</h5>
             <div style={{ height: '300px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.monthly}>
+                <LineChart data={monthlyData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="month" axisLine={false} tickLine={false} />
                   <YAxis axisLine={false} tickLine={false} />
@@ -96,8 +99,8 @@ const Dashboard = () => {
             <div style={{ height: '300px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={data.status_breakdown} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="count" nameKey="status">
-                    {data.status_breakdown.map((entry, index) => (
+                  <Pie data={statusBreakdown} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="count" nameKey="status">
+                    {statusBreakdown.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -127,10 +130,10 @@ const Dashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {data.recent_orders.map((order) => (
+              {recentOrders.map((order) => (
                 <tr key={order.id}>
                   <td className="fw-bold">{order.order_number}</td>
-                  <td>{order.customer_name}</td>
+                  <td>{order.customer_name || 'Guest'}</td>
                   <td>{new Date(order.created_at).toLocaleDateString()}</td>
                   <td className="fw-bold">₹{order.total}</td>
                   <td>

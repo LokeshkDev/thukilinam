@@ -95,8 +95,8 @@ router.get('/reviews', adminAuth, async (req, res, next) => {
     const { approved } = req.query;
     let where = approved !== undefined ? `WHERE r.is_approved=${approved}` : '';
     const [reviews] = await pool.query(`
-      SELECT r.*, p.name AS product_name, u.name AS user_name
-      FROM reviews r JOIN products p ON r.product_id=p.id JOIN users u ON r.user_id=u.id
+      SELECT r.*, p.name AS product_name, COALESCE(r.customer_name, 'Customer') AS user_name
+      FROM reviews r JOIN products p ON r.product_id=p.id
       ${where} ORDER BY r.created_at DESC
     `);
     res.json({ success: true, reviews });

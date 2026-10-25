@@ -41,6 +41,9 @@ const pool = mysql.createPool({
       await ensureColumn('orders', 'tracking_number', 'VARCHAR(100)');
       await ensureColumn('orders', 'courier', 'VARCHAR(50)');
       await ensureColumn('orders', 'notes', 'TEXT');
+      await ensureColumn('orders', 'customer_name', 'VARCHAR(150)');
+      await ensureColumn('orders', 'customer_phone', 'VARCHAR(20)');
+      await ensureColumn('orders', 'customer_email', 'VARCHAR(150)');
       await ensureColumn('order_items', 'attributes', 'JSON');
       console.log('✅ Database schema verified: order columns are up to date.');
     } catch (dbErr) {

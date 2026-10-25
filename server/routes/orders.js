@@ -1,6 +1,5 @@
 const router = require('express').Router();
 const pool = require('../database/connection');
-const auth = require('../middleware/auth');
 const { sendOrderConfirmationEmail, sendNewOrderNotificationEmail } = require('../utils/emailUtils');
 const { getShippingSettings, calculateShipping } = require('../utils/shippingUtils');
 const { getClientUrl } = require('../utils/urlUtils');
@@ -38,7 +37,7 @@ function createCashfreeOrder(orderNumber, total, customer) {
       customer_details: {
         customer_id: String(customer.id),
         customer_phone: customer.phone ? customer.phone.replace(/[^0-9]/g, '').slice(-10) : '9999999999',
-        customer_email: customer.email || 'customer@example.com',
+        customer_email: customer.email || 'customer@thukilinam.com',
         customer_name: customer.name || 'Customer'
       },
       order_meta: {
@@ -129,37 +128,106 @@ function verifyCashfreePayment(orderNumber) {
   });
 }
 
-// POST /api/orders — place order
-router.post('/', auth, async (req, res, next) => {
+// POST /api/orders — place order (No login required, Phone mandatory, Email optional)
+router.post('/', async (req, res, next) => {
   try {
-    const { shipping_address, billing_address, payment_method = 'cashfree', coupon_code, notes } = req.body;
-    if (!shipping_address) return res.status(400).json({ success: false, message: 'Shipping address required.' });
+    const {
+      items: rawItems,
+      shipping_address,
+      billing_address,
+      payment_method = 'cashfree',
+      coupon_code,
+      notes,
+      customer_name,
+      customer_phone,
+      customer_email
+    } = req.body;
 
-    if (payment_method !== 'cashfree') {
-      return res.status(400).json({ success: false, message: 'Only online payment via Cashfree is supported. COD is disabled.' });
+    if (!shipping_address) {
+      return res.status(400).json({ success: false, message: 'Shipping address is required.' });
     }
 
-    // Get cart items
-    const [carts] = await pool.query('SELECT id FROM cart WHERE user_id=?', [req.user.id]);
-    if (!carts.length) return res.status(400).json({ success: false, message: 'Cart is empty.' });
-    const cartId = carts[0].id;
+    // Phone number is strictly mandatory
+    const rawPhone = shipping_address.phone || customer_phone || '';
+    const cleanPhone = String(rawPhone).replace(/[^0-9]/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      return res.status(400).json({ success: false, message: 'A valid 10-digit mobile number is mandatory.' });
+    }
+    const phone = cleanPhone.slice(-10);
 
-    const [items] = await pool.query(`
-      SELECT ci.*, p.name, p.price, p.discount_price, p.stock,
-             pv.attributes, pv.price AS variant_price, pv.sale_price AS variant_sale_price,
-             (SELECT image_url FROM product_images WHERE product_id=p.id AND is_primary=1 LIMIT 1) AS image
-      FROM cart_items ci JOIN products p ON ci.product_id=p.id
-      LEFT JOIN product_variants pv ON ci.variant_id=pv.id
-      WHERE ci.cart_id=?
-    `, [cartId]);
+    // Full name is mandatory
+    const fullName = (shipping_address.full_name || customer_name || '').trim();
+    if (!fullName) {
+      return res.status(400).json({ success: false, message: 'Customer full name is required.' });
+    }
 
-    if (!items.length) return res.status(400).json({ success: false, message: 'Cart is empty.' });
+    // Email is optional
+    const email = (shipping_address.email || customer_email || '').trim() || null;
 
-    // Calculate totals
-    let subtotal = items.reduce((sum, i) => {
-      const price = parseFloat(i.variant_sale_price || i.variant_price || i.discount_price || i.price || 0);
-      return sum + price * i.quantity;
-    }, 0);
+    if (!shipping_address.line1 || !shipping_address.city || !shipping_address.state || !shipping_address.pincode) {
+      return res.status(400).json({ success: false, message: 'Complete delivery address (Line 1, City, State, Pincode) is required.' });
+    }
+
+    if (payment_method !== 'cashfree') {
+      return res.status(400).json({ success: false, message: 'Only online payment via Cashfree is supported.' });
+    }
+
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      return res.status(400).json({ success: false, message: 'Your shopping cart is empty.' });
+    }
+
+    // Prepare and verify items from DB
+    const validatedItems = [];
+    let subtotal = 0;
+
+    for (const item of rawItems) {
+      const productId = item.product_id || item.id;
+      const quantity = Math.max(1, parseInt(item.quantity) || 1);
+
+      const [pRows] = await pool.query('SELECT * FROM products WHERE id=? AND is_active=1', [productId]);
+      if (!pRows.length) {
+        return res.status(400).json({ success: false, message: `Product not available (ID: ${productId}).` });
+      }
+      const prod = pRows[0];
+
+      let price = parseFloat(prod.discount_price || prod.price);
+      let variantAttrs = item.attributes || null;
+      let variantSize = item.size || null;
+      let variantColor = item.color || null;
+
+      if (item.variant_id) {
+        const [vRows] = await pool.query('SELECT * FROM product_variants WHERE id=? AND product_id=?', [item.variant_id, productId]);
+        if (vRows.length) {
+          const v = vRows[0];
+          if (v.sale_price || v.price) {
+            price = parseFloat(v.sale_price || v.price);
+          }
+          if (v.attributes) variantAttrs = v.attributes;
+          if (v.size) variantSize = v.size;
+          if (v.color) variantColor = v.color;
+        }
+      }
+
+      // Fallback image from DB if not provided
+      let itemImage = item.image || null;
+      if (!itemImage) {
+        const [imgRows] = await pool.query('SELECT image_url FROM product_images WHERE product_id=? AND is_primary=1 LIMIT 1', [productId]);
+        if (imgRows.length) itemImage = imgRows[0].image_url;
+      }
+
+      subtotal += price * quantity;
+      validatedItems.push({
+        product_id: prod.id,
+        name: prod.name,
+        price,
+        quantity,
+        image: itemImage,
+        size: variantSize,
+        color: variantColor,
+        attributes: variantAttrs
+      });
+    }
+
     const shippingSettings = await getShippingSettings(pool);
     let shipping = calculateShipping(subtotal, shippingSettings);
     let discount = 0;
@@ -186,16 +254,12 @@ router.post('/', auth, async (req, res, next) => {
     const total = Math.max(0, subtotal + shipping - discount);
     const orderNumber = genOrderNumber();
 
-    // Fetch user details for Cashfree
-    const [userRows] = await pool.query('SELECT email, name, phone FROM users WHERE id=?', [req.user.id]);
-    const userObj = userRows[0] || {};
-
-    // Create Cashfree session first to verify details and get session ID
+    // Create Cashfree session
     const cfCustomer = {
-      id: req.user.id,
-      phone: shipping_address.phone || userObj.phone || '9999999999',
-      email: userObj.email || 'customer@example.com',
-      name: shipping_address.full_name || userObj.name || 'Customer'
+      id: `cust_${phone}`,
+      phone: phone,
+      email: email || 'customer@thukilinam.com',
+      name: fullName
     };
 
     let paymentSessionId = '';
@@ -205,7 +269,7 @@ router.post('/', auth, async (req, res, next) => {
       if (!paymentSessionId) {
         return res.status(500).json({
           success: false,
-          message: 'Cashfree did not return a valid payment session. Check API keys and CASHFREE_ENV.'
+          message: 'Cashfree did not return a valid payment session. Check API credentials.'
         });
       }
     } catch (cfErr) {
@@ -213,51 +277,81 @@ router.post('/', auth, async (req, res, next) => {
       return res.status(500).json({ success: false, message: `Failed to initialize Cashfree payment: ${cfErr.message}` });
     }
 
-    // Insert order in DB
+    const finalShippingAddress = {
+      ...shipping_address,
+      full_name: fullName,
+      phone: phone,
+      email: email
+    };
+
+    // Insert order in DB without user_id
     const [orderResult] = await pool.query(`
-      INSERT INTO orders (order_number, user_id, status, subtotal, shipping_charge, tax, discount, total, coupon_code, payment_method, payment_status, shipping_address, billing_address, notes)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      INSERT INTO orders (
+        order_number, user_id, customer_name, customer_phone, customer_email,
+        status, subtotal, shipping_charge, tax, discount, total,
+        coupon_code, payment_method, payment_status, shipping_address, billing_address, notes
+      ) VALUES (?, NULL, ?, ?, ?, 'pending', ?, ?, 0, ?, ?, ?, 'cashfree', 'pending', ?, ?, ?)
     `, [
-      orderNumber, req.user.id, 'pending', subtotal, shipping, 0, discount, total,
-      coupon_code || null, 'cashfree', 'pending',
-      JSON.stringify(shipping_address), JSON.stringify(billing_address || shipping_address), notes || null
+      orderNumber,
+      fullName,
+      phone,
+      email,
+      subtotal,
+      shipping,
+      discount,
+      total,
+      coupon_code || null,
+      JSON.stringify(finalShippingAddress),
+      JSON.stringify(billing_address || finalShippingAddress),
+      notes || null
     ]);
 
     const orderId = orderResult.insertId;
 
     // Insert order items + update stock
-    for (const item of items) {
+    for (const item of validatedItems) {
       await pool.query(
-        'INSERT INTO order_items (order_id, product_id, product_name, product_image, price, quantity, variant_size, variant_color, attributes) VALUES (?,?,?,?,?,?,?,?,?)',
-        [orderId, item.product_id, item.name, item.image, item.variant_sale_price || item.variant_price || item.discount_price || item.price, item.quantity, item.size || null, item.color || null, typeof item.attributes === 'object' ? JSON.stringify(item.attributes) : item.attributes || null]
+        `INSERT INTO order_items (order_id, product_id, product_name, product_image, price, quantity, variant_size, variant_color, attributes)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+        [
+          orderId,
+          item.product_id,
+          item.name,
+          item.image,
+          item.price,
+          item.quantity,
+          item.size || null,
+          item.color || null,
+          typeof item.attributes === 'object' ? JSON.stringify(item.attributes) : item.attributes || null
+        ]
       );
-      await pool.query('UPDATE products SET stock=stock-? WHERE id=? AND stock > 0', [item.quantity, item.product_id]);
+      await pool.query('UPDATE products SET stock=GREATEST(0, stock-?) WHERE id=?', [item.quantity, item.product_id]);
     }
-
-    // Clear cart
-    await pool.query('DELETE FROM cart_items WHERE cart_id=?', [cartId]);
-
-    // Note: We don't send confirmation email here since payment is pending. 
-    // It will be sent inside /verify upon successful completion!
 
     res.status(201).json({
       success: true,
       message: 'Order initiated successfully!',
       payment_session_id: paymentSessionId,
       cashfree_mode: getCashfreeMode(),
-      order: { id: orderId, order_number: orderNumber, total, status: 'pending', payment_method: 'cashfree' }
+      order: {
+        id: orderId,
+        order_number: orderNumber,
+        total,
+        status: 'pending',
+        payment_method: 'cashfree'
+      }
     });
   } catch (err) { next(err); }
 });
 
-// POST /api/orders/verify — verify online payment
-router.post('/verify', auth, async (req, res, next) => {
+// POST /api/orders/verify — verify online payment (No login required)
+router.post('/verify', async (req, res, next) => {
   try {
     const { order_id } = req.body;
     if (!order_id) return res.status(400).json({ success: false, message: 'Order ID is required.' });
 
     // Check if order exists in DB
-    const [orders] = await pool.query('SELECT * FROM orders WHERE order_number=? AND user_id=?', [order_id, req.user.id]);
+    const [orders] = await pool.query('SELECT * FROM orders WHERE order_number=?', [order_id]);
     if (!orders.length) return res.status(404).json({ success: false, message: 'Order not found.' });
     
     const order = orders[0];
@@ -281,28 +375,34 @@ router.post('/verify', auth, async (req, res, next) => {
         ['paid', 'processing', cfOrder.cf_order_id || null, order.id]
       );
 
-      // Send confirmation email (non-blocking)
+      // Parse address if string
+      const shippingAddress = typeof order.shipping_address === 'string'
+        ? JSON.parse(order.shipping_address || '{}')
+        : (order.shipping_address || {});
+
+      const customerName = order.customer_name || shippingAddress.full_name || 'Customer';
+      const customerEmail = order.customer_email || shippingAddress.email;
+
+      // Send emails (non-blocking)
       try {
-        const [userRows] = await pool.query('SELECT email, name FROM users WHERE id=?', [req.user.id]);
         const [items] = await pool.query('SELECT * FROM order_items WHERE order_id=?', [order.id]);
-        if (userRows.length) {
-          const emailOrder = {
-            order_number: order_id,
-            total: order.total,
-            payment_method: 'cashfree',
-            status: 'processing',
-            shipping_address: order.shipping_address,
-            customer_name: userRows[0].name,
-            customer_email: userRows[0].email,
-            items
-          };
-          await sendOrderConfirmationEmail(userRows[0].email, userRows[0].name, {
-            ...emailOrder
-          });
-          await sendNewOrderNotificationEmail(emailOrder);
+        const emailOrder = {
+          order_number: order_id,
+          total: order.total,
+          payment_method: 'cashfree',
+          status: 'processing',
+          shipping_address: shippingAddress,
+          customer_name: customerName,
+          customer_email: customerEmail || 'N/A',
+          items
+        };
+
+        if (customerEmail) {
+          await sendOrderConfirmationEmail(customerEmail, customerName, emailOrder);
         }
+        await sendNewOrderNotificationEmail(emailOrder);
       } catch (e) {
-        console.error('Email sending failed:', e.message);
+        console.error('Email sending error (ignored):', e.message);
       }
 
       return res.json({ success: true, message: 'Payment verified and order is being processed!', status: 'paid' });
@@ -317,16 +417,16 @@ router.post('/verify', auth, async (req, res, next) => {
 // GET /api/orders/track — public order tracking lookup
 router.get('/track', async (req, res, next) => {
   try {
-    const { order_number, email } = req.query;
+    const { order_number, email, phone } = req.query;
     if (!order_number) {
       return res.status(400).json({ success: false, message: 'Order number is required.' });
     }
 
     const [rows] = await pool.query(
       `SELECT o.id, o.order_number, o.status, o.payment_status, o.payment_method, o.total,
-              o.tracking_number, o.courier, o.created_at, o.updated_at, u.email AS customer_email
+              o.tracking_number, o.courier, o.created_at, o.updated_at,
+              o.customer_name, o.customer_phone, o.customer_email, o.shipping_address
        FROM orders o
-       JOIN users u ON o.user_id = u.id
        WHERE o.order_number = ?`,
       [String(order_number).trim()]
     );
@@ -336,9 +436,26 @@ router.get('/track', async (req, res, next) => {
     }
 
     const order = rows[0];
-    if (email && order.customer_email.toLowerCase() !== String(email).trim().toLowerCase()) {
-      return res.status(404).json({ success: false, message: 'Order not found.' });
+
+    // Optional verification if email was passed
+    if (email && order.customer_email && order.customer_email.toLowerCase() !== String(email).trim().toLowerCase()) {
+      return res.status(404).json({ success: false, message: 'Order not found with provided email.' });
     }
+
+    // Optional verification if phone was passed
+    if (phone) {
+      const cleanPhone = String(phone).replace(/[^0-9]/g, '').slice(-10);
+      const cleanOrderPhone = String(order.customer_phone || '').replace(/[^0-9]/g, '').slice(-10);
+      if (cleanPhone && cleanOrderPhone && cleanPhone !== cleanOrderPhone) {
+        return res.status(404).json({ success: false, message: 'Order not found with provided phone number.' });
+      }
+    }
+
+    // Get order items
+    const [items] = await pool.query(
+      'SELECT product_name, product_image, price, quantity, variant_size, variant_color FROM order_items WHERE order_id=?',
+      [order.id]
+    );
 
     res.json({
       success: true,
@@ -351,48 +468,10 @@ router.get('/track', async (req, res, next) => {
         tracking_number: order.tracking_number,
         courier: order.courier,
         created_at: order.created_at,
-        updated_at: order.updated_at
+        updated_at: order.updated_at,
+        items
       }
     });
-  } catch (err) { next(err); }
-});
-
-// GET /api/orders — user's orders
-router.get('/', auth, async (req, res, next) => {
-  try {
-    const { page = 1, limit = 10 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    const [orders] = await pool.query(
-      'SELECT * FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?',
-      [req.user.id, parseInt(limit), offset]
-    );
-    
-    if (orders.length > 0) {
-      const orderIds = orders.map(o => o.id);
-      const [items] = await pool.query(
-        'SELECT oi.*, p.slug FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id IN (?)',
-        [orderIds]
-      );
-      orders.forEach(order => {
-        order.items = items.filter(item => item.order_id === order.id);
-      });
-    }
-
-    const [countRows] = await pool.query('SELECT COUNT(*) AS total FROM orders WHERE user_id=?', [req.user.id]);
-    res.json({ success: true, orders, total: countRows[0].total });
-  } catch (err) { next(err); }
-});
-
-// GET /api/orders/:id
-router.get('/:id', auth, async (req, res, next) => {
-  try {
-    const [rows] = await pool.query('SELECT * FROM orders WHERE id=? AND user_id=?', [req.params.id, req.user.id]);
-    if (!rows.length) return res.status(404).json({ success: false, message: 'Order not found.' });
-    const [items] = await pool.query(
-      'SELECT oi.*, p.slug FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id=?',
-      [req.params.id]
-    );
-    res.json({ success: true, order: { ...rows[0], items } });
   } catch (err) { next(err); }
 });
 

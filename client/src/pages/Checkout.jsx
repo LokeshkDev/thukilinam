@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import ShippingNote from '../components/ui/ShippingNote';
 
@@ -9,19 +8,14 @@ const formatPrice = (value = 0) => `Rs. ${Number(value).toLocaleString('en-IN')}
 
 const Checkout = () => {
   const { cartItems, summary, clearCart, coupon } = useCart();
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  
-  const [savedAddresses, setSavedAddresses] = useState([]);
-  const [selectedAddressId, setSelectedAddressId] = useState('');
-  
-  const [saveNewAddress, setSaveNewAddress] = useState(false);
-  const [addressType, setAddressType] = useState('home');
+  const [phoneError, setPhoneError] = useState('');
 
   const [formData, setFormData] = useState({
-    full_name: user?.name || '',
-    phone: user?.phone || '',
+    full_name: '',
+    phone: '',
+    email: '',
     line1: '',
     city: '',
     state: '',
@@ -29,95 +23,78 @@ const Checkout = () => {
     payment_method: 'cashfree'
   });
 
-  useEffect(() => {
-    fetchSavedAddresses();
-  }, []);
-
-  const fetchSavedAddresses = async () => {
-    try {
-      const res = await api.get('/users/addresses');
-      if (res.data.success && res.data.addresses.length > 0) {
-        setSavedAddresses(res.data.addresses);
-      }
-    } catch (err) {
-      console.error('Error fetching addresses:', err);
-    }
-  };
-
-  const handleAddressSelect = (id) => {
-    if (id === 'new') {
-      setSelectedAddressId('');
-      setFormData({
-        ...formData,
-        full_name: user?.name || '', phone: user?.phone || '',
-        line1: '', city: '', state: '', pincode: ''
-      });
-      return;
-    }
-    
-    setSelectedAddressId(id);
-    setSaveNewAddress(false);
-    const addr = savedAddresses.find(a => a.id.toString() === id.toString());
-    if (addr) {
-      setFormData({
-        ...formData,
-        full_name: addr.full_name,
-        phone: addr.phone,
-        line1: addr.line1,
-        city: addr.city,
-        state: addr.state,
-        pincode: addr.pincode
-      });
+  const handlePhoneChange = (e) => {
+    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+    setFormData({ ...formData, phone: val });
+    if (val.length > 0 && val.length < 10) {
+      setPhoneError('Please enter a full 10-digit mobile number.');
+    } else {
+      setPhoneError('');
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (cartItems.length === 0) return;
+    if (cartItems.length === 0) {
+      alert('Your shopping bag is empty.');
+      navigate('/shop');
+      return;
+    }
+
+    const cleanPhone = formData.phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 10) {
+      setPhoneError('Valid 10-digit mobile number is mandatory.');
+      alert('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
     setLoading(true);
     try {
-      // 1. Save address if requested
-      if (!selectedAddressId && saveNewAddress) {
-        await api.post('/users/addresses', {
-          type: addressType,
-          full_name: formData.full_name,
-          phone: formData.phone,
-          line1: formData.line1,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-          country: 'India',
-          is_default: savedAddresses.length === 0
-        });
-      }
-
-      // 2. Place Order
       const orderData = {
+        items: cartItems.map((item) => ({
+          product_id: item.product_id,
+          variant_id: item.variant_id,
+          quantity: item.quantity,
+          name: item.name,
+          price: item.variant_sale_price || item.variant_price || item.discount_price || item.price,
+          image: item.image,
+          attributes: item.attributes,
+          size: item.size,
+          color: item.color
+        })),
+        customer_name: formData.full_name.trim(),
+        customer_phone: cleanPhone.slice(-10),
+        customer_email: formData.email.trim() || undefined,
         shipping_address: {
-          full_name: formData.full_name,
-          phone: formData.phone,
-          line1: formData.line1,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
+          full_name: formData.full_name.trim(),
+          phone: cleanPhone.slice(-10),
+          email: formData.email.trim() || undefined,
+          line1: formData.line1.trim(),
+          city: formData.city.trim(),
+          state: formData.state.trim(),
+          pincode: formData.pincode.trim(),
           country: 'India'
         },
         payment_method: formData.payment_method,
         ...(coupon?.code ? { coupon_code: coupon.code } : {})
       };
-      
+
       const res = await api.post('/orders', orderData);
+
       if (res.data.success && res.data.payment_session_id) {
         if (!window.Cashfree) {
           throw new Error('Payment gateway SDK failed to load. Please refresh the page and try again.');
         }
 
-        const cashfreeMode = res.data.cashfree_mode || import.meta.env.VITE_CASHFREE_MODE || 'sandbox';
+        const cashfreeMode = res.data.cashfree_mode || import.meta.env.VITE_CASHFREE_MODE || 'production';
         const sessionId = res.data.payment_session_id;
 
         if (!sessionId || typeof sessionId !== 'string') {
-          throw new Error('Invalid payment session from server. Ensure server CASHFREE_ENV matches your API keys.');
+          throw new Error('Invalid payment session from server.');
         }
+
+        // Clear cart now that order session is created
+        clearCart();
 
         const cashfree = window.Cashfree({ mode: cashfreeMode });
         const checkoutOptions = {
@@ -136,13 +113,30 @@ const Checkout = () => {
     }
   };
 
+  if (cartItems.length === 0) {
+    return (
+      <main className="app-page cart-page">
+        <section className="app-empty-state">
+          <span className="app-empty-icon">
+            <svg className="icon" aria-hidden="true"><use href="#icon-bag"></use></svg>
+          </span>
+          <h2>Your shopping bag is empty</h2>
+          <p>Add your favorite boutique pieces to proceed with checkout.</p>
+          <Link to="/shop" className="button primary">
+            Explore Collection
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-page cart-page">
       <section className="app-page-head">
         <div>
-          <p className="eyebrow">Secure Checkout</p>
+          <p className="eyebrow">Quick &amp; Direct Checkout</p>
           <h1>Complete Your Order</h1>
-          <p>Provide your shipping and payment details.</p>
+          <p>No login needed. Fill in your delivery details to proceed to payment.</p>
         </div>
       </section>
 
@@ -155,84 +149,95 @@ const Checkout = () => {
                 <svg className="icon" aria-hidden="true"><use href="#icon-bag"></use></svg>
               </span>
               <div>
-                <h2>Shipping Information</h2>
-                <p>Where should we send your order?</p>
+                <h2>Delivery Details</h2>
+                <p>Where should we deliver your boutique package?</p>
               </div>
             </div>
 
-            {savedAddresses.length > 0 && (
-              <div style={{ marginBottom: '24px' }}>
-                <label className="field">
-                  <span>Saved Addresses</span>
-                  <select 
-                    value={selectedAddressId || 'new'} 
-                    onChange={(e) => handleAddressSelect(e.target.value)}
-                    style={{ padding: '12px', borderRadius: '8px', border: '1px solid var(--line)', background: 'var(--soft)', width: '100%', outline: 'none' }}
-                  >
-                    <option value="new">+ Enter a new address</option>
-                    {savedAddresses.map(addr => (
-                      <option key={addr.id} value={addr.id}>
-                        {addr.type.toUpperCase()} - {addr.full_name}, {addr.line1}, {addr.city} - {addr.pincode}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
               <label className="field">
-                <span>Full Name</span>
-                <input type="text" required placeholder="John Doe" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} disabled={!!selectedAddressId} />
+                <span>Full Name *</span>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ananya Sharma"
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                />
               </label>
-              
+
               <label className="field">
-                <span>Phone Number</span>
-                <input type="tel" required placeholder="+91 98765 43210" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} disabled={!!selectedAddressId} />
+                <span>Phone Number * (Mandatory)</span>
+                <input
+                  type="tel"
+                  required
+                  maxLength="10"
+                  placeholder="10-digit mobile number"
+                  value={formData.phone}
+                  onChange={handlePhoneChange}
+                />
+                {phoneError && <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px' }}>{phoneError}</span>}
+              </label>
+            </div>
+
+            <div style={{ marginTop: '16px' }}>
+              <label className="field">
+                <span>Email Address (Optional)</span>
+                <input
+                  type="email"
+                  placeholder="name@example.com (optional, for invoice & updates)"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
               </label>
             </div>
 
             <label className="field" style={{ marginTop: '16px' }}>
-              <span>Address (Line 1)</span>
-              <input type="text" required placeholder="House No, Street, Landmark" value={formData.line1} onChange={e => setFormData({...formData, line1: e.target.value})} disabled={!!selectedAddressId} />
+              <span>Address (Flat, House No, Building, Street) *</span>
+              <input
+                type="text"
+                required
+                placeholder="Door No, Street Name, Landmark"
+                value={formData.line1}
+                onChange={(e) => setFormData({ ...formData, line1: e.target.value })}
+              />
             </label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginTop: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', marginTop: '16px' }}>
               <label className="field">
-                <span>City</span>
-                <input type="text" required placeholder="City" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} disabled={!!selectedAddressId} />
+                <span>City *</span>
+                <input
+                  type="text"
+                  required
+                  placeholder="City"
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                />
               </label>
-              
+
               <label className="field">
-                <span>State</span>
-                <input type="text" required placeholder="State" value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} disabled={!!selectedAddressId} />
+                <span>State *</span>
+                <input
+                  type="text"
+                  required
+                  placeholder="State"
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                />
               </label>
-              
+
               <label className="field">
-                <span>Pincode</span>
-                <input type="text" required placeholder="000 000" value={formData.pincode} onChange={e => setFormData({...formData, pincode: e.target.value})} disabled={!!selectedAddressId} />
+                <span>Pincode *</span>
+                <input
+                  type="text"
+                  required
+                  maxLength="6"
+                  placeholder="6-digit pincode"
+                  value={formData.pincode}
+                  onChange={(e) => setFormData({ ...formData, pincode: e.target.value.replace(/[^0-9]/g, '') })}
+                />
               </label>
             </div>
-
-            {!selectedAddressId && (
-              <div style={{ marginTop: '24px', padding: '16px', background: 'var(--soft)', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontWeight: 'bold' }}>
-                  <input type="checkbox" checked={saveNewAddress} onChange={(e) => setSaveNewAddress(e.target.checked)} style={{ width: 'auto', margin: 0 }} />
-                  Save this address for future orders
-                </label>
-                
-                {saveNewAddress && (
-                  <div style={{ marginTop: '16px', display: 'flex', gap: '16px' }}>
-                    {['home', 'work', 'other'].map(type => (
-                      <label key={type} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', textTransform: 'capitalize' }}>
-                        <input type="radio" name="addr_type" checked={addressType === type} onChange={() => setAddressType(type)} style={{ width: 'auto', margin: 0 }} />
-                        {type}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="auth-card" style={{ maxWidth: '100%', margin: '0' }}>
@@ -245,7 +250,7 @@ const Checkout = () => {
               </span>
               <div>
                 <h2>Payment Method</h2>
-                <p>Choose how you want to pay.</p>
+                <p>100% secure payment gateway.</p>
               </div>
             </div>
 
@@ -257,13 +262,18 @@ const Checkout = () => {
                 background: formData.payment_method === 'cashfree' ? 'var(--soft)' : 'transparent',
                 transition: 'all 0.2s ease', margin: 0
               }}>
-                <input type="radio" checked={formData.payment_method === 'cashfree'} onChange={() => setFormData({...formData, payment_method: 'cashfree'})} style={{ width: 'auto', margin: 0 }} />
+                <input
+                  type="radio"
+                  checked={formData.payment_method === 'cashfree'}
+                  onChange={() => setFormData({ ...formData, payment_method: 'cashfree' })}
+                  style={{ width: 'auto', margin: 0 }}
+                />
                 <div>
-                  <strong style={{ display: 'block', color: 'var(--ink)' }}>Online Payment</strong>
-                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Pay securely via UPI, Card, Netbanking (Cashfree).</span>
+                  <strong style={{ display: 'block', color: 'var(--ink)' }}>Online Payment (Cashfree)</strong>
+                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Pay instantly via UPI (GPay, PhonePe, Paytm), Cards, Netbanking.</span>
                 </div>
               </label>
-              
+
               <label className="field" style={{
                 border: '1px solid var(--line)', padding: '16px', borderRadius: '8px', cursor: 'not-allowed',
                 opacity: 0.6, flexDirection: 'row', alignItems: 'center', gap: '14px', margin: 0,
@@ -272,7 +282,7 @@ const Checkout = () => {
                 <input type="radio" disabled checked={false} style={{ width: 'auto', margin: 0 }} />
                 <div>
                   <strong style={{ display: 'block', color: 'var(--ink)' }}>Cash on Delivery</strong>
-                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Temporarily unavailable.</span>
+                  <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Currently unavailable for online boutique orders.</span>
                 </div>
               </label>
             </div>
@@ -281,11 +291,11 @@ const Checkout = () => {
 
         <aside className="checkout-summary" aria-label="Order summary">
           <div className="summary-card">
-            <p className="eyebrow">Your Order</p>
+            <p className="eyebrow">Your Selection</p>
             <h2>Order Summary</h2>
 
             <div style={{ maxHeight: '320px', overflowY: 'auto', margin: '20px 0', paddingRight: '8px' }}>
-              {cartItems.map(item => (
+              {cartItems.map((item) => (
                 <div key={item.id} style={{ display: 'flex', gap: '12px', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--line)' }}>
                   <img src={item.image} alt={item.name} style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '8px' }} />
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -353,10 +363,16 @@ const Checkout = () => {
               </div>
             </dl>
 
-            <button form="checkout-form" className="button primary" type="submit" disabled={loading || cartItems.length === 0} style={{ width: '100%', justifyContent: 'center' }}>
-              {loading ? 'Processing...' : 'Confirm Order'}
+            <button
+              form="checkout-form"
+              className="button primary"
+              type="submit"
+              disabled={loading || cartItems.length === 0}
+              style={{ width: '100%', justifyContent: 'center' }}
+            >
+              {loading ? 'Processing Payment...' : 'Proceed to Pay'}
             </button>
-            <p className="summary-note">Secure checkout with encrypted details.</p>
+            <p className="summary-note">Encrypted &amp; secure checkout with Cashfree.</p>
           </div>
         </aside>
       </section>

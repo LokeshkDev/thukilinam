@@ -10,70 +10,55 @@ const Wishlist = () => {
     <main className="app-page dashboard-page">
       <section className="app-page-head">
         <div>
-          <p className="eyebrow">Your Account</p>
-          <h1>Wishlist</h1>
-          <p>Saved pieces stay ready for the next drop or a quick checkout.</p>
+          <p className="eyebrow">Your Favorites</p>
+          <h1>Saved Items</h1>
+          <p>Your saved boutique pieces stay ready here for quick checkout.</p>
         </div>
       </section>
 
-      <section className="dashboard-layout">
-        <aside className="account-panel">
-          <div className="account-avatar">T</div>
+      <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 60px' }}>
+        <div className="content-toolbar" style={{ marginBottom: '24px' }}>
           <div>
-            <p className="eyebrow">Dashboard</p>
-            <h2>My Account</h2>
+            <h2>My Wishlist</h2>
+            <p>{wishlistItems.length} items saved</p>
           </div>
-          <nav className="account-nav" aria-label="Account navigation">
-            <Link to="/profile">Profile Settings</Link>
-            <Link to="/orders">Order History</Link>
-            <Link to="/wishlist" className="is-active">My Wishlist</Link>
-          </nav>
-        </aside>
-
-        <div className="dashboard-content">
-          <div className="content-toolbar">
-            <div>
-              <h2>Saved Items</h2>
-              <p>{wishlistItems.length} items saved</p>
-            </div>
-            <Link to="/shop" className="button secondary">Shop More</Link>
-          </div>
-
-          {loading ? (
-            <div className="app-empty-state compact">
-              <p>Loading your saved items...</p>
-            </div>
-          ) : wishlistItems.length === 0 ? (
-            <div className="app-empty-state compact">
-              <span className="app-empty-icon">
-                <svg className="icon" aria-hidden="true">
-                  <use href="#icon-heart"></use>
-                </svg>
-              </span>
-              <h2>No saved items yet</h2>
-              <p>Tap the heart on pieces you love and they will appear here.</p>
-              <Link to="/shop" className="button primary">Explore Collection</Link>
-            </div>
-          ) : (
-            <div className="wishlist-grid">
-              {wishlistItems.map((item) => (
-                <ProductCard
-                  key={item.id}
-                  product={{
-                    id: item.product_id,
-                    name: item.name,
-                    slug: item.slug,
-                    price: item.discount_price || item.price,
-                    discount_price: item.discount_price,
-                    image: item.image,
-                    category_name: item.category_name || 'Boutique Collection',
-                    avg_rating: 5.0
-                  }}
-                />
-              ))}
-            </div>
-          )}
+          <Link to="/shop" className="button secondary">Explore More Styles</Link>
         </div>
+
+        {loading ? (
+          <div className="app-empty-state compact">
+            <p>Loading your saved items...</p>
+          </div>
+        ) : wishlistItems.length === 0 ? (
+          <div className="app-empty-state compact">
+            <span className="app-empty-icon">
+              <svg className="icon" aria-hidden="true">
+                <use href="#icon-heart"></use>
+              </svg>
+            </span>
+            <h2>No saved items yet</h2>
+            <p>Tap the heart icon on any piece you love and it will be saved here.</p>
+            <Link to="/shop" className="button primary">Explore Collection</Link>
+          </div>
+        ) : (
+          <div className="wishlist-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '24px' }}>
+            {wishlistItems.map((item) => (
+              <ProductCard
+                key={item.id || item.product_id}
+                product={{
+                  id: item.product_id || item.id,
+                  name: item.name,
+                  slug: item.slug,
+                  price: item.discount_price || item.price,
+                  discount_price: item.discount_price,
+                  image: item.image || item.primary_image,
+                  category_name: item.category_name || 'Boutique Collection',
+                  avg_rating: item.avg_rating || 5.0
+                }}
+              />
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

@@ -2,14 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useSettings } from '../../context/SettingsContext';
 import { useCart } from '../../context/CartContext';
-import { useAuth } from '../../context/AuthContext';
 import api from '../../api/axios';
 
 const Header = () => {
   const location = useLocation();
   const { settings } = useSettings();
   const { cartCount } = useCart();
-  const { user } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -150,25 +148,14 @@ const Header = () => {
 
           <nav className="action-nav" aria-label="Shopping actions">
             <Link 
-              to={user ? "/profile" : "/login"}
-              style={location.pathname === (user ? "/profile" : "/login") ? { boxShadow: '0 2px 0 0 var(--purple-700)', color: 'var(--purple-700)' } : {}}
+              to="/track"
+              style={location.pathname === "/track" ? { boxShadow: '0 2px 0 0 var(--purple-700)', color: 'var(--purple-700)' } : {}}
             >
               <svg className="icon" aria-hidden="true">
-                <use href="#icon-user"></use>
+                <use href="#icon-trend"></use>
               </svg>
-              Account
+              Track Order
             </Link>
-            {!user && (
-              <Link 
-                to="/register"
-                style={location.pathname === "/register" ? { boxShadow: '0 2px 0 0 var(--purple-700)', color: 'var(--purple-700)' } : {}}
-              >
-                <svg className="icon" aria-hidden="true">
-                  <use href="#icon-user"></use>
-                </svg>
-                Register
-              </Link>
-            )}
             <Link 
               to="/wishlist"
               style={location.pathname === "/wishlist" ? { boxShadow: '0 2px 0 0 var(--purple-700)', color: 'var(--purple-700)' } : {}}
@@ -225,18 +212,25 @@ const Header = () => {
             <img src={logoImage} alt={`${logoText} logo`} />
             <span>{logoText}</span>
           </Link>
-          <Link className="icon-button mobile-bag-button" to="/cart" aria-label={`Open bag with ${cartCount} items`}>
-            <svg className="icon" aria-hidden="true">
-              <use href="#icon-bag"></use>
-            </svg>
-            {cartCount > 0 && <strong>{cartCount}</strong>}
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Link className="icon-button mobile-bag-button" to="/track" aria-label="Track order" style={{ position: 'relative' }}>
+              <svg className="icon" aria-hidden="true">
+                <use href="#icon-trend"></use>
+              </svg>
+            </Link>
+            <Link className="icon-button mobile-bag-button" to="/cart" aria-label={`Open bag with ${cartCount} items`}>
+              <svg className="icon" aria-hidden="true">
+                <use href="#icon-bag"></use>
+              </svg>
+              {cartCount > 0 && <strong>{cartCount}</strong>}
+            </Link>
+          </div>
         </div>
         <label className="mobile-search">
           <svg className="icon" aria-hidden="true">
             <use href="#icon-search"></use>
           </svg>
-          <input type="search" placeholder="Search sarees, kurti sets..." />
+          <input type="search" placeholder="Search sarees, kurti sets..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </label>
       </header>
     </>

@@ -14,7 +14,7 @@ router.get('/', adminAuth, async (req, res, next) => {
       const [res2] = await pool.query("SELECT SUM(total) AS sum FROM orders WHERE status NOT IN ('cancelled','refunded')");
       total_revenue = res2[0]?.sum || 0;
       
-      const [res3] = await pool.query('SELECT COUNT(*) AS count FROM users');
+      const [res3] = await pool.query('SELECT COUNT(DISTINCT COALESCE(customer_phone, id)) AS count FROM orders');
       total_users = res3[0]?.count || 0;
       
       const [res4] = await pool.query('SELECT COUNT(*) AS count FROM products WHERE is_active=1');
@@ -42,8 +42,9 @@ router.get('/', adminAuth, async (req, res, next) => {
     let recent_orders = [];
     try {
       [recent_orders] = await pool.query(`
-        SELECT o.id, o.order_number, o.total, o.status, o.payment_method, o.created_at, u.name AS customer_name
-        FROM orders o LEFT JOIN users u ON o.user_id=u.id ORDER BY o.created_at DESC LIMIT 10
+        SELECT o.id, o.order_number, o.total, o.status, o.payment_method, o.created_at,
+               COALESCE(o.customer_name, JSON_UNQUOTE(JSON_EXTRACT(o.shipping_address, '$.full_name'))) AS customer_name
+        FROM orders o ORDER BY o.created_at DESC LIMIT 10
       `);
     } catch (dbErr) {
       console.error('Error fetching recent orders:', dbErr);
@@ -62,11 +63,9 @@ router.get('/', adminAuth, async (req, res, next) => {
     }
 
     // Order status breakdown
-    let status_breakdown = [];
+    let order_status = [];
     try {
-      [status_breakdown] = await pool.query(`
-        SELECT status, COUNT(*) AS count FROM orders GROUP BY status
-      `);
+      [order_status] = await pool.query('SELECT status, COUNT(*) AS count FROM orders GROUP BY status');
     } catch (dbErr) {
       console.error('Error fetching status breakdown:', dbErr);
     }
@@ -74,12 +73,13 @@ router.get('/', adminAuth, async (req, res, next) => {
     res.json({
       success: true,
       stats: { total_orders, total_revenue, total_users, total_products, pending_orders },
-      monthly, recent_orders, top_products, status_breakdown
+      monthly: monthly || [],
+      recent_orders: recent_orders || [],
+      top_products: top_products || [],
+      status_breakdown: order_status || [],
+      order_status: order_status || []
     });
-  } catch (err) {
-    console.error('Dashboard Route Error:', err);
-    res.status(500).json({ success: false, message: 'Internal Server Error' });
-  }
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

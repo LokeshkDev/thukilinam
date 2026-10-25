@@ -1,67 +1,56 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import api from '../api/axios';
-import { useAuth } from './AuthContext';
+import { useCart } from './CartContext';
 
 const WishlistContext = createContext();
 
 export const useWishlist = () => useContext(WishlistContext);
 
+const WISHLIST_STORAGE_KEY = 'thukilinam_wishlist';
+
 export const WishlistProvider = ({ children }) => {
-  const { user } = useAuth();
-  const [wishlistItems, setWishlistItems] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const { addToCart } = useCart();
+  const [wishlistItems, setWishlistItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem(WISHLIST_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
   useEffect(() => {
-    if (user) {
-      fetchWishlist();
-    } else {
-      setWishlistItems([]);
-    }
-  }, [user]);
-
-  const fetchWishlist = async () => {
-    setLoading(true);
     try {
-      const response = await api.get('/wishlist');
-      if (response.data.success) {
-        setWishlistItems(response.data.items);
-      }
-    } catch (error) {
-      console.error('Error fetching wishlist:', error);
-    } finally {
-      setLoading(false);
+      localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(wishlistItems));
+    } catch (e) {
+      console.error('Failed to save wishlist:', e);
     }
-  };
+  }, [wishlistItems]);
 
-  const toggleWishlist = async (productId) => {
-    const isExist = wishlistItems.find(item => item.product_id === productId);
-    try {
-      if (isExist) {
-        await api.delete(`/wishlist/${productId}`);
+  const toggleWishlist = (product) => {
+    const productId = typeof product === 'object' ? product.id : product;
+    setWishlistItems((prev) => {
+      const exists = prev.some((item) => (item.id || item.product_id) === productId);
+      if (exists) {
+        return prev.filter((item) => (item.id || item.product_id) !== productId);
       } else {
-        await api.post('/wishlist', { product_id: productId });
+        const itemToAdd = typeof product === 'object' ? product : { id: productId, product_id: productId };
+        return [...prev, itemToAdd];
       }
-      fetchWishlist();
-    } catch (error) {
-      console.error('Error toggling wishlist:', error);
-    }
+    });
   };
 
-  const moveToCart = async (productId) => {
-    try {
-      const response = await api.post(`/wishlist/${productId}/move-to-cart`);
-      if (response.data.success) {
-        fetchWishlist();
-        return true;
-      }
-    } catch (error) {
-      console.error('Error moving to cart:', error);
+  const moveToCart = async (product) => {
+    const success = await addToCart(product, null, 1);
+    if (success) {
+      const productId = typeof product === 'object' ? product.id : product;
+      setWishlistItems((prev) => prev.filter((item) => (item.id || item.product_id) !== productId));
+      return true;
     }
     return false;
   };
 
   return (
-    <WishlistContext.Provider value={{ wishlistItems, loading, toggleWishlist, moveToCart, fetchWishlist }}>
+    <WishlistContext.Provider value={{ wishlistItems, loading: false, toggleWishlist, moveToCart }}>
       {children}
     </WishlistContext.Provider>
   );

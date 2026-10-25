@@ -4,24 +4,6 @@
 -- CREATE DATABASE IF NOT EXISTS dbstorelinam CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 -- USE dbstorelinam;
 
--- ============================================================
--- USERS
--- ============================================================
-CREATE TABLE IF NOT EXISTS users (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL,
-  email VARCHAR(150) NOT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
-  phone VARCHAR(20),
-  avatar VARCHAR(255),
-  is_blocked TINYINT(1) DEFAULT 0,
-  reset_token VARCHAR(255),
-  reset_token_expiry DATETIME,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- ============================================================
 -- ADMIN USERS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS admin_users (
@@ -126,62 +108,6 @@ CREATE TABLE IF NOT EXISTS product_specs (
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
--- ============================================================
--- ADDRESSES
--- ============================================================
-CREATE TABLE IF NOT EXISTS addresses (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  type ENUM('home','work','other') DEFAULT 'home',
-  full_name VARCHAR(100) NOT NULL,
-  phone VARCHAR(20) NOT NULL,
-  line1 VARCHAR(255) NOT NULL,
-  line2 VARCHAR(255),
-  city VARCHAR(100) NOT NULL,
-  state VARCHAR(100) NOT NULL,
-  pincode VARCHAR(10) NOT NULL,
-  country VARCHAR(50) DEFAULT 'India',
-  is_default TINYINT(1) DEFAULT 0,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- ============================================================
--- CART
--- ============================================================
-CREATE TABLE IF NOT EXISTS cart (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL UNIQUE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS cart_items (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  cart_id INT NOT NULL,
-  product_id INT NOT NULL,
-  variant_id INT,
-  quantity INT DEFAULT 1,
-  added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (cart_id) REFERENCES cart(id) ON DELETE CASCADE,
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-  FOREIGN KEY (variant_id) REFERENCES product_variants(id) ON DELETE SET NULL
-);
-
--- ============================================================
--- WISHLIST
--- ============================================================
-CREATE TABLE IF NOT EXISTS wishlist (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  product_id INT NOT NULL,
-  added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY unique_wish (user_id, product_id),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-);
-
--- ============================================================
 -- COUPONS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS coupons (
@@ -204,7 +130,10 @@ CREATE TABLE IF NOT EXISTS coupons (
 CREATE TABLE IF NOT EXISTS orders (
   id INT AUTO_INCREMENT PRIMARY KEY,
   order_number VARCHAR(50) NOT NULL UNIQUE,
-  user_id INT NOT NULL,
+  user_id INT NULL DEFAULT NULL,
+  customer_name VARCHAR(150),
+  customer_phone VARCHAR(20),
+  customer_email VARCHAR(150),
   status ENUM('pending','processing','shipped','delivered','cancelled','refunded') DEFAULT 'pending',
   subtotal DECIMAL(10,2) NOT NULL,
   shipping_charge DECIMAL(10,2) DEFAULT 0,
@@ -221,8 +150,7 @@ CREATE TABLE IF NOT EXISTS orders (
   courier VARCHAR(50),
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- ============================================================
@@ -248,7 +176,10 @@ CREATE TABLE IF NOT EXISTS order_items (
 CREATE TABLE IF NOT EXISTS reviews (
   id INT AUTO_INCREMENT PRIMARY KEY,
   product_id INT NOT NULL,
-  user_id INT NOT NULL,
+  user_id INT NULL DEFAULT NULL,
+  customer_name VARCHAR(150),
+  customer_phone VARCHAR(20),
+  customer_email VARCHAR(150),
   order_id INT,
   rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
   title VARCHAR(200),
@@ -256,7 +187,6 @@ CREATE TABLE IF NOT EXISTS reviews (
   is_approved TINYINT(1) DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
   UNIQUE KEY unique_user_product_review (user_id, product_id)
 );

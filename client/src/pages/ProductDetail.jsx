@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ProductCard from '../components/ui/ProductCard';
 import api from '../api/axios';
@@ -22,6 +22,59 @@ const ProductDetail = () => {
   const [userHasSelectedVariant, setUserHasSelectedVariant] = useState(false);
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
+
+  // Gallery controls
+  const thumbnailTrackRef = useRef(null);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+
+  const handleNextImage = () => {
+    if (!galleryImages || galleryImages.length <= 1) return;
+    setSelectedVariantImage(null);
+    setActiveThumb((prev) => (prev + 1) % galleryImages.length);
+  };
+
+  const handlePrevImage = () => {
+    if (!galleryImages || galleryImages.length <= 1) return;
+    setSelectedVariantImage(null);
+    setActiveThumb((prev) => (prev - 1 + galleryImages.length) % galleryImages.length);
+  };
+
+  const handleTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    if (distance > 45) {
+      handleNextImage();
+    } else if (distance < -45) {
+      handlePrevImage();
+    }
+  };
+
+  const scrollThumbnails = (direction) => {
+    if (thumbnailTrackRef.current) {
+      const scrollAmount = direction === 'left' ? -220 : 220;
+      thumbnailTrackRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    if (thumbnailTrackRef.current && thumbnailTrackRef.current.children[activeThumb]) {
+      thumbnailTrackRef.current.children[activeThumb].scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+  }, [activeThumb]);
 
   // Review states
   const [reviews, setReviews] = useState([]);
@@ -222,26 +275,14 @@ const ProductDetail = () => {
   const isSaved = wishlistItems.some((item) => item.product_id === product.id || item.id === product.id);
 
   const handleAddToCart = async () => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
     setAdding(true);
-    const success = await addToCart(product.id, selectedVariant?.id || null, 1);
+    await addToCart(product, selectedVariant || null, 1);
     setAdding(false);
-    setAdded(success);
-    if (success) {
-      window.setTimeout(() => setAdded(false), 1300);
-    }
+    navigate('/cart');
   };
 
   const handleWishlist = () => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    toggleWishlist(product.id);
+    toggleWishlist(product);
   };
 
   const renderStars = (ratingVal, interactive = false) => {
@@ -300,24 +341,94 @@ const ProductDetail = () => {
       <div className="product-container">
         {/* Product Images */}
         <div className="product-gallery">
-          <div className="main-image">
-            <img src={selectedVariantImage || galleryImages[activeThumb]} alt={product.name} id="active-image" />
+          <div 
+            className="main-image"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <img 
+              src={selectedVariantImage || galleryImages[activeThumb] || '/assets/thukilinam-logo.jpeg'} 
+              alt={product.name} 
+              id="active-image" 
+              onError={(e) => { e.target.src = '/assets/thukilinam-logo.jpeg'; }}
+            />
+
+            {galleryImages.length > 1 && (
+              <>
+                <button 
+                  type="button" 
+                  className="gallery-nav-btn prev" 
+                  onClick={handlePrevImage}
+                  aria-label="Previous image"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                  </svg>
+                </button>
+                <button 
+                  type="button" 
+                  className="gallery-nav-btn next" 
+                  onClick={handleNextImage}
+                  aria-label="Next image"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+                <div className="gallery-counter-badge">
+                  {activeThumb + 1} / {galleryImages.length}
+                </div>
+              </>
+            )}
           </div>
-          <div className="thumbnail-list">
-            {galleryImages.map((img, i) => (
-              <button 
-                key={i} 
-                className={activeThumb === i ? 'is-active' : ''} 
-                onClick={() => {
-                  setActiveThumb(i);
-                  setSelectedVariantImage(null);
-                }}
-                type="button"
-              >
-                <img src={img} alt={`Thumbnail ${i + 1}`} />
-              </button>
-            ))}
-          </div>
+
+          {galleryImages.length > 1 && (
+            <div className="thumbnail-strip-wrapper">
+              {galleryImages.length > 4 && (
+                <button 
+                  type="button" 
+                  className="thumb-nav-arrow left" 
+                  onClick={() => scrollThumbnails('left')}
+                  aria-label="Scroll thumbnails left"
+                >
+                  ‹
+                </button>
+              )}
+
+              <div className="thumbnail-list" ref={thumbnailTrackRef}>
+                {galleryImages.map((img, i) => (
+                  <button 
+                    key={i} 
+                    className={activeThumb === i ? 'is-active' : ''} 
+                    onClick={() => {
+                      setActiveThumb(i);
+                      setSelectedVariantImage(null);
+                    }}
+                    type="button"
+                    aria-label={`View image ${i + 1}`}
+                  >
+                    <img 
+                      src={img} 
+                      alt={`Thumbnail ${i + 1}`} 
+                      onError={(e) => { e.target.src = '/assets/thukilinam-logo.jpeg'; }}
+                    />
+                  </button>
+                ))}
+              </div>
+
+              {galleryImages.length > 4 && (
+                <button 
+                  type="button" 
+                  className="thumb-nav-arrow right" 
+                  onClick={() => scrollThumbnails('right')}
+                  aria-label="Scroll thumbnails right"
+                >
+                  ›
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Product Info */}
