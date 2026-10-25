@@ -21,7 +21,6 @@ import PaymentCallback from './pages/PaymentCallback';
 import Wishlist from './pages/dashboard/Wishlist';
 import ContentPage from './pages/ContentPage';
 import Contact from './pages/Contact';
-import TrackOrder from './pages/TrackOrder';
 import CategoryLanding from './pages/CategoryLanding';
 
 // Scroll to top on route change
@@ -59,7 +58,6 @@ const AppShell = () => {
           <Route path="/stores" element={<ContentPage pageKey="stores" />} />
           <Route path="/help" element={<ContentPage pageKey="help" />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/track" element={<TrackOrder />} />
 
           {/* Cart & Checkout (Guest / Direct checkout - no login required) */}
           <Route path="/cart" element={<Cart />} />
@@ -72,8 +70,8 @@ const AppShell = () => {
           <Route path="/register" element={<Navigate to="/shop" replace />} />
           <Route path="/forgot-password" element={<Navigate to="/shop" replace />} />
           <Route path="/reset-password" element={<Navigate to="/shop" replace />} />
-          <Route path="/profile" element={<Navigate to="/track" replace />} />
-          <Route path="/orders" element={<Navigate to="/track" replace />} />
+          <Route path="/profile" element={<Navigate to="/" replace />} />
+          <Route path="/orders" element={<Navigate to="/" replace />} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />

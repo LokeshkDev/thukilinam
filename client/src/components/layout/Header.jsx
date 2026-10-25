@@ -50,7 +50,6 @@ const Header = () => {
         <div className="utility-bar">
           <span>{announcementText}</span>
           <nav aria-label="Utility navigation">
-            <Link to="/track">Track order</Link>
             <Link to="/stores">Stores</Link>
             <Link to="/help">Help</Link>
           </nav>
@@ -148,15 +147,6 @@ const Header = () => {
 
           <nav className="action-nav" aria-label="Shopping actions">
             <Link 
-              to="/track"
-              style={location.pathname === "/track" ? { boxShadow: '0 2px 0 0 var(--purple-700)', color: 'var(--purple-700)' } : {}}
-            >
-              <svg className="icon" aria-hidden="true">
-                <use href="#icon-trend"></use>
-              </svg>
-              Track Order
-            </Link>
-            <Link 
               to="/wishlist"
               style={location.pathname === "/wishlist" ? { boxShadow: '0 2px 0 0 var(--purple-700)', color: 'var(--purple-700)' } : {}}
             >
@@ -213,9 +203,9 @@ const Header = () => {
             <span>{logoText}</span>
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Link className="icon-button mobile-bag-button" to="/track" aria-label="Track order" style={{ position: 'relative' }}>
+            <Link className="icon-button mobile-bag-button" to="/wishlist" aria-label="Wishlist">
               <svg className="icon" aria-hidden="true">
-                <use href="#icon-trend"></use>
+                <use href="#icon-heart"></use>
               </svg>
             </Link>
             <Link className="icon-button mobile-bag-button" to="/cart" aria-label={`Open bag with ${cartCount} items`}>

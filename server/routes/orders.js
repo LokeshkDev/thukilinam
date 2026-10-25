@@ -11,6 +11,8 @@ const {
   extractPaymentSessionId
 } = require('../utils/cashfreeUtils');
 const https = require('https');
+const requireRecaptcha = require('../middleware/requireRecaptcha');
+const { sanitizeString, sanitizeObject, sanitizePhone, sanitizeEmail } = require('../utils/sanitizeUtils');
 
 // Helper: generate order number
 function genOrderNumber() {
@@ -128,41 +130,48 @@ function verifyCashfreePayment(orderNumber) {
   });
 }
 
-// POST /api/orders — place order (No login required, Phone mandatory, Email optional)
-router.post('/', async (req, res, next) => {
+// POST /api/orders — place order (Protected by reCAPTCHA & Sanitization)
+router.post('/', requireRecaptcha, async (req, res, next) => {
   try {
     const {
       items: rawItems,
-      shipping_address,
-      billing_address,
+      shipping_address: rawShippingAddress,
+      billing_address: rawBillingAddress,
       payment_method = 'cashfree',
-      coupon_code,
-      notes,
-      customer_name,
-      customer_phone,
-      customer_email
+      coupon_code: rawCouponCode,
+      notes: rawNotes,
+      customer_name: rawCustomerName,
+      customer_phone: rawCustomerPhone,
+      customer_email: rawCustomerEmail
     } = req.body;
 
-    if (!shipping_address) {
+    if (!rawShippingAddress) {
       return res.status(400).json({ success: false, message: 'Shipping address is required.' });
     }
 
+    // Sanitize objects and strings
+    const shipping_address = sanitizeObject(rawShippingAddress);
+    const billing_address = rawBillingAddress ? sanitizeObject(rawBillingAddress) : null;
+    const coupon_code = rawCouponCode ? sanitizeString(rawCouponCode, 50).toUpperCase() : null;
+    const notes = rawNotes ? sanitizeString(rawNotes, 500) : null;
+
     // Phone number is strictly mandatory
-    const rawPhone = shipping_address.phone || customer_phone || '';
-    const cleanPhone = String(rawPhone).replace(/[^0-9]/g, '');
-    if (!cleanPhone || cleanPhone.length < 10) {
+    const rawPhone = shipping_address.phone || rawCustomerPhone || '';
+    const phone = sanitizePhone(rawPhone);
+    if (!phone || phone.length < 10) {
       return res.status(400).json({ success: false, message: 'A valid 10-digit mobile number is mandatory.' });
     }
-    const phone = cleanPhone.slice(-10);
 
     // Full name is mandatory
-    const fullName = (shipping_address.full_name || customer_name || '').trim();
+    const rawFullName = shipping_address.full_name || rawCustomerName || '';
+    const fullName = sanitizeString(rawFullName, 100);
     if (!fullName) {
       return res.status(400).json({ success: false, message: 'Customer full name is required.' });
     }
 
-    // Email is optional
-    const email = (shipping_address.email || customer_email || '').trim() || null;
+    // Email is optional but sanitized
+    const rawEmail = shipping_address.email || rawCustomerEmail || '';
+    const email = rawEmail ? sanitizeEmail(rawEmail) : null;
 
     if (!shipping_address.line1 || !shipping_address.city || !shipping_address.state || !shipping_address.pincode) {
       return res.status(400).json({ success: false, message: 'Complete delivery address (Line 1, City, State, Pincode) is required.' });

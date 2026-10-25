@@ -160,19 +160,6 @@ const Home = () => {
         })}
       </section>
 
-      {!user && (
-        <section className="home-auth-strip" aria-label="Account access">
-          <div>
-            <p className="eyebrow">Your boutique account</p>
-            <h2>Save wishlist pieces and checkout faster.</h2>
-          </div>
-          <div className="home-auth-actions">
-            <Link to="/login" className="button secondary">Login</Link>
-            <Link to="/register" className="button primary">Create Account</Link>
-          </div>
-        </section>
-      )}
-
       {/* ─── FULL-BLEED BANNER CAROUSEL ──────────────────────────────────────── */}
       <section
         className="hero-carousel"

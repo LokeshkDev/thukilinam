@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingBag, Box, Users, Ticket, Image, Settings, LogOut, X, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Box, Ticket, Image, Settings, LogOut, X, MessageSquare } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -11,10 +11,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     { name: 'Categories', path: '/categories', icon: <LayoutDashboard size={20} /> },
     { name: 'Products', path: '/products', icon: <ShoppingBag size={20} /> },
     { name: 'Orders', path: '/orders', icon: <Box size={20} /> },
-    { name: 'Customers', path: '/customers', icon: <Users size={20} /> },
     { name: 'Coupons', path: '/coupons', icon: <Ticket size={20} /> },
     { name: 'Banners', path: '/banners', icon: <Image size={20} /> },
-    { name: 'Reviews & Feedback', path: '/reviews', icon: <MessageSquare size={20} /> },
     { name: 'Homepage CMS', path: '/cms', icon: <Settings size={20} /> },
   ];
 

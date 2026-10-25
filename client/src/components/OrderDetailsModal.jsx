@@ -133,9 +133,7 @@ const OrderDetailsModal = ({ orderId, onClose }) => {
                     <span className="track-courier-name">Professional Courier</span>
                   </a>
                 </div>
-                <Link to={`/track`} className="button secondary" style={{ marginTop: '12px', display: 'inline-flex' }} onClick={onClose}>
-                  Open track order page
-                </Link>
+                
               </div>
             )}
 

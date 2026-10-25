@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import api from '../api/axios';
 import ShippingNote from '../components/ui/ShippingNote';
+import { getRecaptchaToken } from '../utils/recaptcha';
 
 const formatPrice = (value = 0) => `Rs. ${Number(value).toLocaleString('en-IN')}`;
 
@@ -50,7 +51,10 @@ const Checkout = () => {
 
     setLoading(true);
     try {
+      const recaptchaToken = await getRecaptchaToken('checkout');
+
       const orderData = {
+        recaptcha_token: recaptchaToken || undefined,
         items: cartItems.map((item) => ({
           product_id: item.product_id,
           variant_id: item.variant_id,

@@ -37,7 +37,9 @@ const notifyOrderStatusChange = async (orderId, status, trackingNumber, courier)
 router.get('/', adminAuth, async (req, res, next) => {
   try {
     const { page = 1, limit = 20, status, search } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const isAll = req.query.all === 'true' || limit === 'all';
+    const parsedLimit = isAll ? 10000 : Math.min(10000, parseInt(limit) || 20);
+    const offset = isAll ? 0 : (parseInt(page) - 1) * parsedLimit;
     let where = []; let params = [];
     if (status) { where.push('o.status=?'); params.push(status); }
     if (search) {
@@ -53,10 +55,26 @@ router.get('/', adminAuth, async (req, res, next) => {
              COALESCE(o.customer_phone, JSON_UNQUOTE(JSON_EXTRACT(o.shipping_address, '$.phone'))) AS customer_phone
       FROM orders o
       ${whereClause} ORDER BY o.created_at DESC LIMIT ? OFFSET ?
-    `, [...params, parseInt(limit), offset]);
+    `, [...params, parsedLimit, offset]);
 
     const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM orders o ${whereClause}`, params);
-    res.json({ success: true, orders, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
+    const enhancedOrders = orders.map(order => {
+      let ship = {};
+      try {
+        ship = typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {});
+      } catch (e) { ship = {}; }
+      return {
+        ...order,
+        customer_name: order.customer_name || ship.full_name || 'Guest',
+        customer_phone: order.customer_phone || ship.phone || 'N/A',
+        customer_email: order.customer_email || ship.email || 'N/A',
+        delivery_city: ship.city || '',
+        delivery_state: ship.state || '',
+        delivery_pincode: ship.pincode || '',
+        delivery_address: [ship.line1, ship.city, ship.state, ship.pincode].filter(Boolean).join(', ')
+      };
+    });
+    res.json({ success: true, orders: enhancedOrders, total, page: isAll ? 1 : parseInt(page), pages: isAll ? 1 : Math.ceil(total / parsedLimit) });
   } catch (err) { next(err); }
 });
 

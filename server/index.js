@@ -57,7 +57,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'x-recaptcha-token']
 };
 
 app.use(cors(corsOptions));
@@ -67,23 +67,39 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
+// ─── Rate Limiting & Abuse Prevention ─────────────────────────────────────────
+const adminAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 15, // max 15 attempts
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many admin login attempts from this IP. Please try again after 15 minutes.' }
+});
+
+const orderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // max 30 order requests per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many order requests submitted. Please wait a moment and try again.' }
+});
+
+app.use('/api/admin/auth/login', adminAuthLimiter);
+app.use('/api/orders', orderLimiter);
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: { success: false, message: 'Too many requests, please try again later.' } }));
-app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 200 }));
+app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 300 }));
 
 // Static uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ─── Public Routes ────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/users', require('./routes/users'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/brands', require('./routes/brands'));
 app.use('/api/cart', require('./routes/cart'));
 app.use('/api/wishlist', require('./routes/wishlist'));
 app.use('/api/orders', require('./routes/orders'));
-app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/coupons', require('./routes/coupons'));
 app.use('/api/banners', require('./routes/banners'));
 app.use('/api/settings', require('./routes/settings'));
@@ -93,7 +109,6 @@ app.use('/api/admin/auth', require('./routes/admin/auth'));
 app.use('/api/admin/dashboard', require('./routes/admin/dashboard'));
 app.use('/api/admin/products', require('./routes/admin/products'));
 app.use('/api/admin/orders', require('./routes/admin/orders'));
-app.use('/api/admin/users', require('./routes/admin/users'));
 app.use('/api/admin', require('./routes/admin/catalog'));
 app.use('/api/admin', require('./routes/admin/manage'));
 app.use('/api/admin/settings', require('./routes/admin/settings'));
