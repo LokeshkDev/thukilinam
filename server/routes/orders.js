@@ -299,7 +299,7 @@ router.post('/', requireRecaptcha, async (req, res, next) => {
         order_number, user_id, customer_name, customer_phone, customer_email,
         status, subtotal, shipping_charge, tax, discount, total,
         coupon_code, payment_method, payment_status, shipping_address, billing_address, notes
-      ) VALUES (?, NULL, ?, ?, ?, 'pending', ?, ?, 0, ?, ?, ?, 'cashfree', 'pending', ?, ?, ?)
+      ) VALUES (?, 1, ?, ?, ?, 'pending', ?, ?, 0, ?, ?, ?, 'cashfree', 'pending', ?, ?, ?)
     `, [
       orderNumber,
       fullName,
