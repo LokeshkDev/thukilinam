@@ -103,6 +103,7 @@ const Checkout = () => {
         const cashfree = window.Cashfree({ mode: cashfreeMode });
         const checkoutOptions = {
           paymentSessionId: sessionId,
+          redirectTarget: '_self',
           returnUrl: `${window.location.origin}/payment-callback?order_id=${res.data.order.order_number}`
         };
 
