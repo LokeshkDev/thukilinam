@@ -33,6 +33,7 @@ const ProductDetail = () => {
   const [touchEnd, setTouchEnd] = useState(null);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     const fetchProduct = async () => {
       setLoading(true);
       setError(null);
@@ -142,8 +143,16 @@ const ProductDetail = () => {
     if (thumbnailTrackRef.current && thumbnailTrackRef.current.children[currentActiveIndex]) {
       const track = thumbnailTrackRef.current;
       const targetThumb = track.children[currentActiveIndex];
-      const targetLeft = targetThumb.offsetLeft - (track.clientWidth / 2) + (targetThumb.clientWidth / 2);
-      track.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+      if (targetThumb) {
+        if (currentActiveIndex === 0) {
+          track.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          const trackRect = track.getBoundingClientRect();
+          const thumbRect = targetThumb.getBoundingClientRect();
+          const scrollOffset = (thumbRect.left + thumbRect.width / 2) - (trackRect.left + trackRect.width / 2);
+          track.scrollBy({ left: scrollOffset, behavior: 'smooth' });
+        }
+      }
     }
   }, [currentActiveIndex]);
 
