@@ -414,13 +414,38 @@ router.post('/verify', async (req, res, next) => {
         console.error('Email sending error (ignored):', e.message);
       }
 
-      return res.json({ success: true, message: 'Payment verified and order is being processed!', status: 'paid' });
+      return res.json({ 
+        success: true, 
+        message: 'Payment verified and order is being processed!', 
+        status: 'paid',
+        order: {
+          id: order.id,
+          order_number: order.order_number,
+          total: order.total,
+          subtotal: order.subtotal,
+          shipping_charge: order.shipping_charge,
+          discount: order.discount,
+          payment_method: 'cashfree',
+          payment_status: 'paid',
+          status: 'processing',
+          shipping_address: shippingAddress,
+          customer_name: customerName,
+          customer_email: customerEmail || 'N/A',
+          created_at: order.created_at,
+          items
+        }
+      });
     } else {
       // Update payment status to failed in DB
       await pool.query('UPDATE orders SET payment_status=? WHERE id=?', ['failed', order.id]);
       return res.json({ success: false, message: `Payment not completed. Status: ${cfOrder.order_status}`, status: cfOrder.order_status.toLowerCase() });
     }
   } catch (err) { next(err); }
+});
+
+// GET /api/orders — guest order list fallback (avoids legacy 401/404s)
+router.get('/', (req, res) => {
+  res.json({ success: true, orders: [] });
 });
 
 // GET /api/orders/track — public order tracking lookup

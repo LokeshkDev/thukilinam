@@ -39,7 +39,8 @@ const PaymentCallback = () => {
         
         // 3. Fetch order total and details to display
         try {
-          const orderRes = await api.get(`/orders`);
+          if (res.data.order) { setOrderDetails(res.data.order); }
+          const orderRes = await api.get(`/orders`).catch(() => ({ data: { success: false } }));
           if (orderRes.data.success && orderRes.data.orders.length > 0) {
             const currentOrder = orderRes.data.orders.find(o => o.order_number === orderId);
             if (currentOrder) {
