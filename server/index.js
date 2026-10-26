@@ -123,7 +123,7 @@ app.use((req, res) => res.status(404).json({ success: false, message: `Route ${r
 app.use(require('./middleware/errorHandler'));
 
 // ─── Start Server ────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5012;
 app.listen(PORT, () => {
   console.log(`\n🚀 Thukilinam Server running on http://localhost:${PORT}`);
   console.log(`📊 Admin API: http://localhost:${PORT}/api/admin`);
